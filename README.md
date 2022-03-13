@@ -21,6 +21,8 @@ between the server and its clients.
 - Logging.
 - Private messages.
 - Listing users in chatroom.
+- Messages are sent in JSON format.
+- IPv6.
 
 # Usage
 
