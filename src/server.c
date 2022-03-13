@@ -8,10 +8,13 @@
 /* Constants. */
 #define PORTNO 6969
 #define MAX_CLIENTS 10
+#define BUFFSIZE 220
+#define MSG_SIZE 200
+#define NAME_SIZE 16
 
 /* User-defined types. */
 typedef struct {
-	char *name;
+	char name[16];
 	unsigned int id;
 	int fd;
 } client_t;
@@ -43,7 +46,7 @@ main(void)
 	struct sockaddr_in6 sa6; /* Server address IPv6. */
 	memset(&sa6, 0, sizeof(sa6));
 	sa6.sin6_family = AF_INET6;
-	sa6.sin6_port = PORTNO;
+	sa6.sin6_port = htons(PORTNO);
 	sa6.sin6_addr = in6addr_any;
 
 	if ((bind(fd, (struct sockaddr*) &sa6,
@@ -65,14 +68,12 @@ main(void)
 	 * in G_CLIENTS.
 	 * No more than MAX_CLIENTS can be connected to the server.
 	 */
-	char *name = "test";
-
 	while (1) {
 		pthread_t tid;
 		struct sockaddr_in6 ca6; /* Client address. */
-		socklen_t ca6_sz = sizeof(ca6);
+		socklen_t ca6_len = sizeof(ca6);
 		int cfd = accept(fd, (struct sockaddr*)&ca6,
-			(socklen_t *)&ca6_sz);
+			(socklen_t *)&ca6_len);
 
 		if ((g_clients_connected + 1) > MAX_CLIENTS) {
 			puts("Server is full.");
@@ -80,12 +81,22 @@ main(void)
 			continue;
 		}
 
-		puts("A new client has connected.");
-		++g_clients_connected;
+		char name[NAME_SIZE + 1];
+
+		if (recv(cfd, &name, sizeof(name), 0) == -1) {
+			perror("Error recv'ing client name: ");
+			close(cfd);
+			continue;
+		}
+
+		name[strlen(name) + 1] = '\0';
 
 		client_t *c = create_client(name, g_client_id, cfd);
 		add_client(c);
+
+		++g_clients_connected;
 		++g_client_id;
+
 		pthread_create(&tid, NULL, manage_client,
 			       (void *) c);
 	}
@@ -153,9 +164,14 @@ client_t *
 create_client(char *name, unsigned int id, int fd)
 {
 	client_t *c = (client_t *) malloc(sizeof(client_t));
-	c->name = name;
+	strcpy(c->name, name);
 	c->id = id;
 	c->fd = fd;
+
+	puts("...Client created...");
+	printf("%s\n", c->name);
+	printf("%d\n", c->id);
+	printf("%d\n", c->fd);
 
 	return c;
 }
@@ -172,10 +188,11 @@ manage_client(void *c)
 {
 	client_t *client = (client_t *) c;
 
-	char *msg;
+	printf("Client %s has connected.\n", client->name);
 
 	while (1) {
-
+		sleep(10);
+		break;
 	}
 
 	remove_client(client->id);

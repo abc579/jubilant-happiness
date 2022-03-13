@@ -23,6 +23,7 @@ between the server and its clients.
 - Listing users in chatroom.
 - Messages are sent in JSON format.
 - IPv6.
+- Variable-length messages.
 
 # Usage
 
