@@ -4,13 +4,11 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include "common.h"
 
 /* Constants. */
 #define PORTNO 6969
-#define MAX_CLIENTS 10
-#define BUFFSIZE 220
-#define MSG_SIZE 200
-#define NAME_SIZE 16
+#define MAX_CLIENTS 2
 
 /* User-defined types. */
 typedef struct {
@@ -32,6 +30,7 @@ client_t *create_client(char *, unsigned int, int);
 void add_client(client_t *);
 void remove_client(unsigned int);
 void *manage_client(void *);
+int client_exists(const char*);
 
 int
 main(void)
@@ -63,11 +62,6 @@ main(void)
 	/* Server ready and running. */
 	puts("Server started.");
 
-	/*
-	 * Main loop: listen for new connections and store new clients
-	 * in G_CLIENTS.
-	 * No more than MAX_CLIENTS can be connected to the server.
-	 */
 	while (1) {
 		pthread_t tid;
 		struct sockaddr_in6 ca6; /* Client address. */
@@ -75,21 +69,40 @@ main(void)
 		int cfd = accept(fd, (struct sockaddr*)&ca6,
 			(socklen_t *)&ca6_len);
 
+		char buff[BUFF_SIZE];
+
+		/* Check if server is full. */
 		if ((g_clients_connected + 1) > MAX_CLIENTS) {
-			puts("Server is full.");
+			strcpy(buff, ERR_STATUS);
+			if ((send(cfd, buff, sizeof(buff), 0)) == -1) {
+				perror("Error sending msg server full: ");
+			}
 			close(cfd);
 			continue;
 		}
 
-		char name[NAME_SIZE + 1];
+		/* Send OK status to client. */
+		strcpy(buff, OK_STATUS);
+		if ((send(cfd, buff, strlen(buff), 0)) == -1) {
+			perror("Error sending ok msg: ");
+		}
 
+		char name[NAME_LEN];
+		memset(name, '\0', sizeof(name));
 		if (recv(cfd, &name, sizeof(name), 0) == -1) {
 			perror("Error recv'ing client name: ");
 			close(cfd);
 			continue;
 		}
 
-		name[strlen(name) + 1] = '\0';
+		if (client_exists(name)) {
+			strcpy(buff, ERR_STATUS);
+			if ((send(cfd, buff, strlen(buff), 0)) == -1) {
+				perror("Error sending msg client exists: ");
+			}
+			close(cfd);
+			continue;
+		}
 
 		client_t *c = create_client(name, g_client_id, cfd);
 		add_client(c);
@@ -192,11 +205,35 @@ manage_client(void *c)
 
 	while (1) {
 		sleep(10);
-		break;
 	}
 
 	remove_client(client->id);
 	--g_clients_connected;
 
 	return NULL;
+}
+
+/*
+ * @brief Checks if NAME is already in G_CLIENTS.
+ *
+ * @param[in] name Client's name.
+ *
+ * @return 1 if the NAME already exists; 0 otherwise.
+ */
+int
+client_exists(const char* name)
+{
+	pthread_mutex_lock(&client_mutex);
+
+	for (int i = 0; i < MAX_CLIENTS; ++i) {
+		if (g_clients[i] &&
+		    strcmp(g_clients[i]->name, name) == 0) {
+			pthread_mutex_unlock(&client_mutex);
+			return 1;
+		}
+	}
+
+	pthread_mutex_unlock(&client_mutex);
+
+	return 0;
 }

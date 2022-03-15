@@ -5,28 +5,55 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include "common.h"
 
 #define SERVER_IP "::1"
 #define PORTNO 6969
 
-/* #define MAX_NAME_LEN 16 */
-/* #define MIN_NAME_LEN 3 */
+#define MIN_NAME_LEN 3
 
-/* typedef enum { */
-/* 	/\* Minimum length violated. *\/ */
-/* 	VAL_MIN_LEN, */
-/* 	/\* Maximum length violated. *\/ */
-/* 	VAL_MAX_LEN, */
-/* 	/\* Name contains whitespace in between. *\/ */
-/* 	VAL_WSPACE */
-/* } Name_val_codes; */
+typedef enum {
+	/* Minimum length violated. */
+	NAME_ERR_MIN_LEN,
+	/* Maximum length violated. */
+	NAME_ERR_MAX_LEN,
+	/* Name contains whitespace in between. */
+	NAME_ERR_WSPACE,
+	NAME_OK
+} Name_errcodes;
 
-/* Name_val_codes validate_name(const char *); */
+Name_errcodes validate_name(const char *);
 
 int
 main(void)
 {
-	char buf[256] = "abc";
+	if (system("clear") < 0) {
+		perror("Couldn't clear the screen: ");
+	}
+
+	char name[NAME_LEN] = "";
+	puts("Please type your name: ");
+	fgets(name, NAME_LEN, stdin);
+	name[strcspn(name, "\n")] = '\0'; /* Get rid of the newline. */
+
+	Name_errcodes ne = validate_name(name);
+
+	switch (ne) {
+	case NAME_ERR_MIN_LEN:
+		fprintf(stderr, "Your name has to be at least %d "
+			"characters long.", MIN_NAME_LEN);
+		break;
+	case NAME_ERR_MAX_LEN:
+		fprintf(stderr, "Your name can't exceed %d characters"
+			" long.", NAME_LEN);
+		break;
+	case NAME_ERR_WSPACE:
+		fprintf(stderr, "Your name can't contain whitespaces "
+			"in between.");
+		break;
+	default:
+		break;
+	}
 
 	int sfd = 0;		/* Server file descriptor. */
 
@@ -52,12 +79,70 @@ main(void)
 		return EXIT_FAILURE;
 	}
 
-	if (send(sfd, buf, strlen(buf), 0) == -1) {
-		perror("Error sending username to server: ");
+	char buff[BUFF_SIZE] = "";
+
+	/* Know if server rejected our connection. */
+	if ((recv(sfd, &buff, sizeof(buff), 0)) == -1) {
+		perror("Error recv'ing status from server after "
+		       "connecting: ");
 		return EXIT_FAILURE;
+	}
+
+	if (strstr(buff, ERR_STATUS) != NULL) {
+		fprintf(stderr, "The server is full. Please try "
+			"again later.\n");
+		return EXIT_FAILURE;
+	}
+
+	/*
+	 * Send the name to the server so it can validate that no other
+	 * client exists with the same name.
+	 */
+	if ((send(sfd, name, strlen(name), 0)) == -1) {
+		perror("Error sending name to the server: ");
+		return EXIT_FAILURE;
+	}
+
+	memset(buff, 0, sizeof(buff));
+	if ((recv(sfd, &buff, sizeof(buff), 0)) == -1) {
+		perror("Error recv'ing status from server after "
+			"sending the name: ");
+		return EXIT_FAILURE;
+	}
+
+	if (strstr(buff, ERR_STATUS) != NULL) {
+		fprintf(stderr, "Your name already exists. Try "
+			"again.");
+		return EXIT_FAILURE;
+	}
+
+	puts("****************************");
+	puts("****************************");
+	puts("* Welcome to the Chat Room *");
+	puts("****************************");
+	puts("****************************");
+
+	while (1) {
+		sleep(5);
 	}
 
 	close(sfd);
 
 	return EXIT_SUCCESS;
+}
+
+Name_errcodes
+validate_name(const char *name)
+{
+	int len = strlen(name);
+
+	if (len > NAME_LEN - 1)
+		return NAME_ERR_MAX_LEN;
+	else if (len < MIN_NAME_LEN)
+		return NAME_ERR_MIN_LEN;
+
+	if (strstr(name, " ") != NULL)
+		return NAME_ERR_WSPACE;
+
+	return NAME_OK;
 }

@@ -1,5 +1,5 @@
 CXX=cc
-CXXFLAGS=-std=c17 -Wall -Wextra -Werror -Wpedantic -Wshadow -g3 -fsanitize=address
+CXXFLAGS=-std=c17 -Wall -Wextra -Werror -Wpedantic -Wshadow -g3
 LDFLAGS=-pthread
 
 all: dir
