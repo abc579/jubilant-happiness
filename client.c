@@ -5,14 +5,14 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <unistd.h>
-#include <signal.h>
 #include <pthread.h>
+#include <signal.h>
 
 #include "common.h"
 
 #define SERVER_IP "::1"
 #define PORTNO 6969
-
+#define QUIT_CMD "!quit"
 #define MIN_NAME_LEN 3
 
 /* User-defined types. */
@@ -36,6 +36,7 @@ typedef struct
 static Name_errcodes validate_name(const char*);
 static void *listen_from_server(void*);
 static void *prompt_user(void*);
+static void sig_quit_program(int signo);
 
 /* Globals. */
 volatile sig_atomic_t g_quit = 0;
@@ -150,6 +151,18 @@ int main(void)
 	puts("* Welcome to the Chat Room *");
 	puts("****************************");
 	puts("****************************");
+	puts("\nType !quit to leave the chatroom.");
+
+	/* Handle SIGINT signal. */
+	struct sigaction sact;
+	sact.sa_handler = sig_quit_program;
+	sigemptyset(&sact.sa_mask);
+	sact.flags = 0;
+	if (sigaction(SIGINT, &sact, NULL) == -1)
+	{
+		perror("Error creating signal handler: ");
+		return EXIT_FAILURE;
+	}
 
 	pthread_t tid_server;
 	client_data_t cdata;
@@ -279,6 +292,12 @@ prompt_user(void *arg)
 
 		msg[strcspn(msg, "\n")] = '\0'; /* Get rid of the newline. */
 
+		if (strcmp(msg, QUIT_CMD) == 0)
+		{
+			g_quit = 1;
+			break;
+		}
+
 		snprintf(buff, sizeof(buff), "%s: %s\n", cdata->name, msg);
 
 		if (send(cdata->sfd, buff, strlen(buff), 0) == -1)
@@ -289,4 +308,11 @@ prompt_user(void *arg)
 	}
 
 	return NULL;
+}
+
+static void
+sig_quit_program(int signo)
+{
+	g_quit = 1;
+	printf("Catched signal %d\n.", signo);
 }

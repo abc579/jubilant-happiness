@@ -21,15 +21,13 @@ between the server and its clients.
 - Logging.
 - Private messages.
 - Listing users in chatroom.
-- Messages are sent in JSON format.
 - IPv6.
-- Variable-length messages.
 
 # Usage
 
 First compile the project:
 
-	$ make
+	$ make run
 
 Then go to the `build` directory and run the server:
 
