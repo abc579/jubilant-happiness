@@ -1,3 +1,6 @@
+#define _XOPEN_SOURCE 500
+
+#include <signal.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <netinet/in.h>
@@ -6,8 +9,6 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <pthread.h>
-#include <signal.h>
-
 #include "common.h"
 
 #define SERVER_IP "::1"
@@ -23,8 +24,9 @@ typedef enum
 	/* Maximum length violated. */
 	NAME_ERR_MAX_LEN,
 	/* Name contains whitespace in between. */
-	NAME_ERR_WSPACE, NAME_OK
-} Name_errcodes;
+	NAME_ERR_WSPACE,
+	NAME_OK
+} Name_err_codes;
 
 typedef struct
 {
@@ -33,7 +35,7 @@ typedef struct
 } client_data_t;
 
 /* Functions. */
-static Name_errcodes validate_name(const char*);
+static Name_err_codes validate_name(const char*);
 static void *listen_from_server(void*);
 static void *prompt_user(void*);
 static void sig_quit_program(int signo);
@@ -41,7 +43,8 @@ static void sig_quit_program(int signo);
 /* Globals. */
 volatile sig_atomic_t g_quit = 0;
 
-int main(void)
+int
+main(void)
 {
 	if (system("clear") < 0)
 	{
@@ -60,7 +63,7 @@ int main(void)
 
 	name[strcspn(name, "\n")] = '\0'; /* Get rid of the newline. */
 
-	Name_errcodes ne = validate_name(name);
+	Name_err_codes ne = validate_name(name);
 
 	switch (ne)
 	{
@@ -146,18 +149,20 @@ int main(void)
 		return EXIT_FAILURE;
 	}
 
-	puts("****************************");
+	puts("\n****************************");
 	puts("****************************");
 	puts("* Welcome to the Chat Room *");
 	puts("****************************");
 	puts("****************************");
 	puts("\nType !quit to leave the chatroom.");
+	puts("Type !list to show all clients connected to the chatroom.");
+	puts("Type !whisp and the client name to send a private message.\n");
 
 	/* Handle SIGINT signal. */
 	struct sigaction sact;
 	sact.sa_handler = sig_quit_program;
 	sigemptyset(&sact.sa_mask);
-	sact.flags = 0;
+	sact.sa_flags = 0;
 	if (sigaction(SIGINT, &sact, NULL) == -1)
 	{
 		perror("Error creating signal handler: ");
@@ -201,9 +206,9 @@ int main(void)
  * @brief Returns NAME_OK if validations were successful. Otherwise, it will
  * return the corresponding enumerator indicating which error NAME has.
  *
- * @param[in] name Client name.
+ * @param[in] name
  */
-Name_errcodes
+Name_err_codes
 validate_name(const char *name)
 {
 	int len = strlen(name);
@@ -276,6 +281,7 @@ prompt_user(void *arg)
 
 	char msg[MSG_SIZE];
 	char buff[BUFF_SIZE];
+
 	while (1)
 	{
 		memset(msg, 0, sizeof(msg));
@@ -290,20 +296,33 @@ prompt_user(void *arg)
 			continue;
 		}
 
-		msg[strcspn(msg, "\n")] = '\0'; /* Get rid of the newline. */
+		msg[strcspn(msg, "\n")] = '\0';
 
 		if (strcmp(msg, QUIT_CMD) == 0)
 		{
 			g_quit = 1;
 			break;
 		}
-
-		snprintf(buff, sizeof(buff), "%s: %s\n", cdata->name, msg);
-
-		if (send(cdata->sfd, buff, strlen(buff), 0) == -1)
+		else if (strcmp(msg, LIST_CMD) == 0)
 		{
-			perror("Error sending message to server: ");
-			continue;
+			if (send(cdata->sfd, msg, strlen(msg),
+				 0) == -1)
+			{
+				perror("Error sending list message to"
+				       "the server: ");
+			}
+		}
+		else
+		{
+			snprintf(buff, sizeof(buff), "%s: %s\n",
+				 cdata->name, msg);
+
+			if (send(cdata->sfd, buff, strlen(buff), 0)
+			    == -1)
+			{
+				perror("Error sending message to the "
+				       "server: ");
+			}
 		}
 	}
 

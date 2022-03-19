@@ -37,3 +37,8 @@ Then go to the `build` directory and run the server:
 Finally, run as many clients as you wish:
 
 	$ ./client.o
+
+# TODO
+
+- private chat messages
+- logging public chat

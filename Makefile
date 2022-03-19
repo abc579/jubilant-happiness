@@ -1,28 +1,16 @@
-PROJECT_ROOT = $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
-
 LDFLAGS=-pthread
 
-OBJSC= client.o
-OBJSS= server.o
+BUILD_DIR=build/
 
-ifeq ($(BUILD_MODE),debug)
-	CFLAGS += -std=c17 -g3 -Wall -Werror -Wextra -m64 -fsanitize=address
-else ifeq ($(BUILD_MODE),run)
-	CFLAGS += -O2 -std=c17 -Wall -Werror -Wextra -m64 -fsanitize=address
-else
-    $(error Build mode $(BUILD_MODE) not supported by this Makefile)
-endif
+CC=gcc
+CFLAGS= -g3 -std=c17 -Wall -Werror -Wextra -Wpedantic
 
-all:	server.o client.o
+all: build
+	$(CC) $(CFLAGS) client.c -o $(BUILD_DIR)client $(LDFLAGS)
+	$(CC) $(CFLAGS) server.c -o $(BUILD_DIR)server $(LDFLAGS)
 
-server:	$(OBJSS)
-	$(CC) $(LDFLAGS) -o $@ $^
-
-client: $(OBJSC)
-	$(CC) $(LDFLAGS) -o $@ $^
-
-%.o:	$(PROJECT_ROOT)%.c
-	$(CC) $(CFLAGS) -o $@ $<
+build:
+	mkdir -p build
 
 clean:
-	rm -fr build
+	rm *.o
