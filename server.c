@@ -185,10 +185,7 @@ main(void)
 	}
 
 	/* Cleanup. */
-	puts("Closing server file descriptor.");
 	close(fd);
-
-	puts("Closing file.");
 	fclose(g_log_file);
 
 	return EXIT_SUCCESS;
