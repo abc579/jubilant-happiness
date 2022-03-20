@@ -1,9 +1,7 @@
 LDFLAGS=-pthread
-
 BUILD_DIR=build/
-
 CC=gcc
-CFLAGS= -g3 -std=c17 -Wall -Werror -Wextra -Wpedantic
+CFLAGS=-O2 -std=c17 -Wall -Werror -Wextra -Wpedantic
 
 all: build
 	$(CC) $(CFLAGS) client.c utils.c -o $(BUILD_DIR)client $(LDFLAGS)

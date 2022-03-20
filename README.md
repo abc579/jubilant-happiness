@@ -13,6 +13,8 @@ Small C chat application using sockets.
 This is a small C chat application that uses sockets to communicate
 between the server and its clients.
 
+I have no experience with C whatsoever so please take this code with a grain of salt.
+
 # Features
 
 - Multiple clients.
@@ -22,22 +24,34 @@ between the server and its clients.
 - Private messages (whispers).
 - Listing users in chatroom.
 - IPv6.
+- Client name colours.
+- Trimmed messages.
 
 # Usage
 
-First compile the project:
+1) Clone the repository.
 
-	$ make
+	git clone https://github.com/abc579/jubilant-happiness.git
 
-Then go to the `build` directory and run the server:
+2) Compile.
 
-	$ cd build
-	$ ./server.o
+	cd jubilant-happiness
+	make
 
-Finally, run as many clients as you wish:
+3) Run the server.
 
-	$ ./client.o
+	cd build
+	./server
+
+4) Run N clients and chat.
+
+	cd build
+	./client
+
+# Screenshots
+
+TODO
 
 # TODO
 
-- trim messages
+- Leak analysis.
