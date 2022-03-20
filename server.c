@@ -9,6 +9,7 @@
 /* Constants. */
 #define PORTNO 6969
 #define MAX_CLIENTS 5
+#define LOG_FILE_NAME "log.txt"
 
 /* User-defined types. */
 typedef struct
@@ -25,16 +26,18 @@ pthread_mutex_t client_mutex = PTHREAD_MUTEX_INITIALIZER;
 _Atomic unsigned int g_clients_connected = 0;
 client_t *g_clients[MAX_CLIENTS];
 _Atomic unsigned int g_client_id = 1;
+FILE *g_log_file;
 
 /* Functions. */
-static client_t *create_client(char*, unsigned int, int);
-static void add_client(client_t*);
+static client_t *create_client(char *, unsigned int, int);
+static void add_client(client_t *);
 static void remove_client(const unsigned int);
-static void *manage_client(void*);
-static int client_exists(const char*);
+static void *manage_client(void *);
+static int client_exists(const char *);
 static void broadcast_message(const char*, const int);
 static void send_whisper(char *, client_t *);
 static void send_list_clients(client_t *);
+static void log_message(const char *);
 
 int
 main(void)
@@ -61,6 +64,9 @@ main(void)
 		perror("Error listening: ");
 		return EXIT_FAILURE;
 	}
+
+	/* Open the file to save a log of public messages. */
+	g_log_file = fopen(LOG_FILE_NAME, "a");
 
 	/* Server ready and running. */
 	puts("Server started.");
@@ -131,7 +137,11 @@ main(void)
 	}
 
 	/* Cleanup. */
+	puts("Closing server file descriptor.");
 	close(fd);
+
+	puts("Closing file.");
+	fclose(g_log_file);
 
 	return EXIT_SUCCESS;
 }
@@ -276,10 +286,14 @@ broadcast_message(const char *msg, const int fd)
 {
 	pthread_mutex_lock(&client_mutex);
 
-	for (int i = 0; i < MAX_CLIENTS; ++i)
-		if (g_clients[i] && g_clients[i]->fd != fd)
+	for (int i = 0; i < MAX_CLIENTS; ++i) {
+		if (g_clients[i] && g_clients[i]->fd != fd) {
 			if ((send(g_clients[i]->fd, msg, strlen(msg), 0)) == -1)
 				perror("Error broadcasting msg: ");
+		}
+	}
+
+	log_message(msg);
 
 	pthread_mutex_unlock(&client_mutex);
 }
@@ -350,4 +364,16 @@ send_list_clients(client_t *client)
 
 	if (send(client->fd, msg, strlen(msg), 0) == -1)
 		perror("Error sending list of clients: ");
+}
+
+/*
+ * @brief Append MSG to the log file.
+ *
+ * @note The file has to be opened already.
+ */
+void
+log_message(const char *msg)
+{
+	(void)fputs(msg, g_log_file);
+	fflush(g_log_file);
 }
