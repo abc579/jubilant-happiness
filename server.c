@@ -177,7 +177,7 @@ main(void)
 
 		/* Notify everyone that someone has connected. */
 		snprintf(buff, sizeof(buff), "%s has connected.", c->name);
-		printf("%s", buff);
+		printf("%s\n", buff);
 		broadcast_message(buff, c, SRC_SERVER);
 		log_message(buff);
 
@@ -297,7 +297,7 @@ manage_client(void *c)
 			snprintf(msg, sizeof(msg), "%s has quit.", client->name);
 			broadcast_message(msg, client, SRC_SERVER);
 			log_message(msg);
-			printf("%s", msg);
+			printf("%s\n", msg);
 			break;
 		} else {
 			perror("Error recv'ing data from client: ");
@@ -462,7 +462,7 @@ send_list_clients(client_t *client)
 static void
 log_message(const char *msg)
 {
-	(void)fputs(msg, g_log_file);
+	(void)fprintf(g_log_file, "%s\n", msg);
 	fflush(g_log_file);
 }
 

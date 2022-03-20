@@ -11,6 +11,7 @@
 #include <pthread.h>
 #include <time.h>
 #include "common.h"
+#include "utils.h"
 
 #define SERVER_IP "::1"
 #define PORTNO 6969
@@ -272,6 +273,7 @@ prompt_user(void *arg)
 			continue;
 		}
 
+		trim(msg);
 		msg[strcspn(msg, "\n")] = '\0';
 
 		if (strcmp(msg, QUIT_CMD) == 0) {
