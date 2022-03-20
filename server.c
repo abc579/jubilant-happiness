@@ -14,13 +14,34 @@
 #define MAX_CLIENTS 5
 #define LOG_FILE_NAME "log.txt"
 
+#define COLOUR_SIZE 20
+#define TOTAL_COLOURS 7
+#define RED "\x1B[31m"
+#define GREEN "\x1B[32m"
+#define YELLOW "\x1B[33m"
+#define BLUE "\x1B[34m"
+#define MAGENTA "\x1B[35m"
+#define CYAN "\x1B[36m"
+#define WHITE "\x1B[37m"
+#define RESET "\x1B[0m"
+
 /* User-defined types. */
-typedef struct
-{
+typedef struct {
 	char name[NAME_SIZE];
 	unsigned int id;
 	int fd;
+	char colour[COLOUR_SIZE];
 } client_t;
+
+typedef struct {
+	char colour[COLOUR_SIZE];
+	int used;
+} chat_colours_t;
+
+typedef enum {
+	SRC_SERVER,
+	SRC_CLIENT
+} msg_src;
 
 /* Mutexes. */
 pthread_mutex_t client_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -31,6 +52,16 @@ static client_t *g_clients[MAX_CLIENTS];
 static _Atomic unsigned int g_client_id = 1;
 static FILE *g_log_file;
 static int g_quit = 0;
+static chat_colours_t g_colours_used[TOTAL_COLOURS] =
+{
+	{RED, 0},
+	{GREEN, 0},
+	{YELLOW, 0},
+	{BLUE, 0},
+	{MAGENTA, 0},
+	{CYAN, 0},
+	{WHITE, 0}
+};
 
 /* Functions. */
 static client_t *create_client(char *, unsigned int, int);
@@ -38,7 +69,7 @@ static void add_client(client_t *);
 static void remove_client(const unsigned int);
 static void *manage_client(void *);
 static int client_exists(const char *);
-static void broadcast_message(const char*, const int);
+static void broadcast_message(const char*, client_t *, const msg_src);
 static void send_whisper(char *, client_t *);
 static void send_list_clients(client_t *);
 static void log_message(const char *);
@@ -145,9 +176,9 @@ main(void)
 		++g_client_id;
 
 		/* Notify everyone that someone has connected. */
-		snprintf(buff, sizeof(buff), "%s has connected.\n", c->name);
+		snprintf(buff, sizeof(buff), "%s has connected.", c->name);
 		printf("%s", buff);
-		broadcast_message(buff, c->fd);
+		broadcast_message(buff, c, SRC_SERVER);
 		log_message(buff);
 
 		pthread_create(&tid, NULL, manage_client, (void *) c);
@@ -197,6 +228,12 @@ remove_client(const unsigned int id)
 	for (int i = 0; i < MAX_CLIENTS; ++i)
 		if (g_clients[i] && g_clients[i]->id == id) {
 			close(g_clients[i]->fd);
+
+			/* Release colour. */
+			for (int j = 0; j < TOTAL_COLOURS; ++j)
+				if (strcmp(g_clients[i]->colour, g_colours_used[j].colour) == 0)
+					g_colours_used[i].used = 0;
+
 			free(g_clients[i]);
 			g_clients[i] = NULL;
 			break;
@@ -221,6 +258,14 @@ create_client(char *name, unsigned int id, int fd)
 	strcpy(c->name, name);
 	c->id = id;
 	c->fd = fd;
+
+	/* Assign a colour that is not yet used. */
+	for (int i = 0; i < TOTAL_COLOURS; ++i)
+		if (!g_colours_used[i].used) {
+			strcpy(c->colour, g_colours_used[i].colour);
+			g_colours_used[i].used = 1;
+			break;
+		}
 
 	return c;
 }
@@ -248,12 +293,12 @@ manage_client(void *c)
 			} else if (strstr(msg, WHISP_CMD) != NULL) {
 				send_whisper(msg, client);
 			} else {
-				broadcast_message(msg, client->fd);
+				broadcast_message(msg, client, SRC_CLIENT);
 				log_message(msg);
 			}
 		} else if (response == 0) {
-			snprintf(msg, sizeof(msg), "%s has quit.\n", client->name);
-			broadcast_message(msg, client->fd);
+			snprintf(msg, sizeof(msg), "%s has quit.", client->name);
+			broadcast_message(msg, client, SRC_SERVER);
 			log_message(msg);
 			printf("%s", msg);
 			break;
@@ -297,17 +342,29 @@ client_exists(const char *name)
  * @brief Broadcasts message to everyone connected to the chat room
  * except the sender.
  *
- * @param[in] msg Message.
- * @param[in] fd Sender.
+ * @param[in] msg
+ * @param[in] sender
+ * @param[in] cmsg Client message: 1 or 0.
  */
 static void
-broadcast_message(const char *msg, const int fd)
+broadcast_message(const char *msg, client_t *sender, const msg_src ms)
 {
 	pthread_mutex_lock(&client_mutex);
 
+	char buff[BUFF_SIZE];
+
+	if (ms == SRC_SERVER)
+		snprintf(buff, sizeof(buff), "%s\n", msg);
+	else
+		snprintf(buff, sizeof(buff), "%s%s%s: %s\n",
+			 sender->colour,
+			 sender->name,
+			 RESET,
+			 msg);
+
 	for (int i = 0; i < MAX_CLIENTS; ++i) {
-		if (g_clients[i] && g_clients[i]->fd != fd) {
-			if ((send(g_clients[i]->fd, msg, strlen(msg), 0)) == -1)
+		if (g_clients[i] && g_clients[i]->fd != sender->fd) {
+			if ((send(g_clients[i]->fd, buff, strlen(buff), 0)) == -1)
 				perror("Error broadcasting msg: ");
 		}
 	}
@@ -334,7 +391,7 @@ send_whisper(char *msg, client_t *sender)
 	char contents[MSG_SIZE] = "";
 
 	int i = 0;
-	const int name_pos = 2;
+	const int name_pos = 1;
 	char *tok = strtok(tmp, " ");
 
 	while (tok) {
@@ -358,7 +415,11 @@ send_whisper(char *msg, client_t *sender)
 		if (g_clients[i] && strcmp(g_clients[i]->name, name) == 0) {
 			char buff[BUFF_SIZE] = "";
 
-			snprintf(buff, sizeof(buff), "_whisper_ %s: %s\n", sender->name, contents);
+			snprintf(buff, sizeof(buff), "_whisper_ %s%s%s: %s\n",
+				 sender->colour,
+				 sender->name,
+				 RESET,
+				 contents);
 
 			if (send(g_clients[i]->fd, buff, sizeof(buff), 0) == -1)
 				perror("Error sending whisper: ");

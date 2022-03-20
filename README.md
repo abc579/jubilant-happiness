@@ -40,5 +40,6 @@ Finally, run as many clients as you wish:
 
 # TODO
 
-- colors
 - trim messages
+- pthread_mutex_destroy
+- cursive whisper messages

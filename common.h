@@ -1,7 +1,7 @@
 #ifndef COMMON_H
 #define COMMON_H
 
-#define BUFF_SIZE 250
+#define BUFF_SIZE 300
 #define MSG_SIZE 200
 #define NAME_SIZE 16
 #define OK_STATUS "OK"

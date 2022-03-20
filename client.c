@@ -257,14 +257,12 @@ listen_from_server(void *arg)
 static void*
 prompt_user(void *arg)
 {
-	client_data_t *cdata = (client_data_t*) arg;
+	client_data_t *cdata = (client_data_t *) arg;
 
 	char msg[MSG_SIZE];
-	char buff[BUFF_SIZE];
 
 	while (1) {
 		memset(msg, 0, sizeof(msg));
-		memset(buff, 0, sizeof(buff));
 
 		printf("> ");
 		fflush(stdout);
@@ -279,15 +277,10 @@ prompt_user(void *arg)
 		if (strcmp(msg, QUIT_CMD) == 0) {
 			g_quit = 1;
 			break;
-		} else if (strcmp(msg, LIST_CMD) == 0) {
-			if (send(cdata->sfd, msg, strlen(msg), 0) == -1)
-				perror("Error sending list message to the server: ");
-		} else {
-			snprintf(buff, sizeof(buff), "%s: %s\n", cdata->name, msg);
-
-			if (send(cdata->sfd, buff, strlen(buff), 0) == -1)
-				perror("Error sending message to the server: ");
 		}
+
+		if (send(cdata->sfd, msg, strlen(msg), 0) == -1)
+			perror("Error sending list message to the server: ");
 	}
 
 	return NULL;
