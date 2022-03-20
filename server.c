@@ -1,9 +1,12 @@
+#define _XOPEN_SOURCE 500
+
 #include <stdlib.h>
 #include <pthread.h>
 #include <netinet/in.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <signal.h>
 #include "common.h"
 
 /* Constants. */
@@ -23,10 +26,11 @@ typedef struct
 pthread_mutex_t client_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 /* Globals. */
-_Atomic unsigned int g_clients_connected = 0;
-client_t *g_clients[MAX_CLIENTS];
-_Atomic unsigned int g_client_id = 1;
-FILE *g_log_file;
+static _Atomic unsigned int g_clients_connected = 0;
+static client_t *g_clients[MAX_CLIENTS];
+static _Atomic unsigned int g_client_id = 1;
+static FILE *g_log_file;
+static int g_quit = 0;
 
 /* Functions. */
 static client_t *create_client(char *, unsigned int, int);
@@ -38,6 +42,7 @@ static void broadcast_message(const char*, const int);
 static void send_whisper(char *, client_t *);
 static void send_list_clients(client_t *);
 static void log_message(const char *);
+static void sig_quit_program(int);
 
 int
 main(void)
@@ -65,13 +70,24 @@ main(void)
 		return EXIT_FAILURE;
 	}
 
+	/* Handle SIGINT. */
+	struct sigaction sact;
+	sact.sa_handler = sig_quit_program;
+	sigemptyset(&sact.sa_mask);
+	sact.sa_flags = 0;
+
+	if (sigaction(SIGINT, &sact, NULL) == -1) {
+		perror("Error creating signal handler: ");
+		return EXIT_FAILURE;
+	}
+
 	/* Open the file to save a log of public messages. */
 	g_log_file = fopen(LOG_FILE_NAME, "a");
 
 	/* Server ready and running. */
 	puts("Server started.");
 
-	while (1) {
+	while (!g_quit) {
 		pthread_t tid;
 		struct sockaddr_in6 ca6; /* Client address. */
 		socklen_t ca6_len = sizeof(ca6);
@@ -132,6 +148,7 @@ main(void)
 		snprintf(buff, sizeof(buff), "%s has connected.\n", c->name);
 		printf("%s", buff);
 		broadcast_message(buff, c->fd);
+		log_message(buff);
 
 		pthread_create(&tid, NULL, manage_client, (void *) c);
 	}
@@ -152,7 +169,7 @@ main(void)
  *
  * @param[in] c New client connected.
  */
-void
+static void
 add_client(client_t *c)
 {
 	pthread_mutex_lock(&client_mutex);
@@ -167,13 +184,12 @@ add_client(client_t *c)
 }
 
 /*
- * @brief Find the client that has the id passed as parameter
- * in the array of clients connected.
+ * @brief Find the client that has the id passed as parameter.
  * Then, close its fd and free everything.
  *
  * @param[in] id Id of the client to remove.
  */
-void
+static void
 remove_client(const unsigned int id)
 {
 	pthread_mutex_lock(&client_mutex);
@@ -195,8 +211,10 @@ remove_client(const unsigned int id)
  * @param[in] name Client name in the chatroom.
  * @param[in] id Client id.
  * @param[in] fd Client file descriptor.
+ *
+ * @return New allocated client.
  */
-client_t *
+static client_t *
 create_client(char *name, unsigned int id, int fd)
 {
 	client_t *c = (client_t *) malloc(sizeof(client_t));
@@ -209,12 +227,11 @@ create_client(char *name, unsigned int id, int fd)
 
 /*
  * @brief Each client connected will be managed by this function. It
- * basically handles incoming messages from the client and broadcasts
- * them to everyone.
+ * basically handles incoming messages from the client.
  *
  * @param[in] c New client connected to the chatroom.
  */
-void *
+static void *
 manage_client(void *c)
 {
 	client_t *client = (client_t *) c;
@@ -232,10 +249,12 @@ manage_client(void *c)
 				send_whisper(msg, client);
 			} else {
 				broadcast_message(msg, client->fd);
+				log_message(msg);
 			}
 		} else if (response == 0) {
 			snprintf(msg, sizeof(msg), "%s has quit.\n", client->name);
 			broadcast_message(msg, client->fd);
+			log_message(msg);
 			printf("%s", msg);
 			break;
 		} else {
@@ -258,7 +277,7 @@ manage_client(void *c)
  *
  * @return 1 if the NAME already exists; 0 otherwise.
  */
-int
+static int
 client_exists(const char *name)
 {
 	pthread_mutex_lock(&client_mutex);
@@ -281,7 +300,7 @@ client_exists(const char *name)
  * @param[in] msg Message.
  * @param[in] fd Sender.
  */
-void
+static void
 broadcast_message(const char *msg, const int fd)
 {
 	pthread_mutex_lock(&client_mutex);
@@ -293,8 +312,6 @@ broadcast_message(const char *msg, const int fd)
 		}
 	}
 
-	log_message(msg);
-
 	pthread_mutex_unlock(&client_mutex);
 }
 
@@ -302,11 +319,12 @@ broadcast_message(const char *msg, const int fd)
  * @brief Parse MSG to extract the client that has to receive the message
  * and the actual message.
  *
- * msg format: "name: !whisp name2 message"
+ * msg format: "Clientname: !whisp receivername message"
  */
-void
+static void
 send_whisper(char *msg, client_t *sender)
 {
+	/* Copy MSG To TMP because strtok modifies it. */
 	char tmp[MSG_SIZE] = "";
 
 	for (size_t i = 0; i < strlen(msg); ++i)
@@ -316,8 +334,8 @@ send_whisper(char *msg, client_t *sender)
 	char contents[MSG_SIZE] = "";
 
 	int i = 0;
-	char *tok = strtok(tmp, " ");
 	const int name_pos = 2;
+	char *tok = strtok(tmp, " ");
 
 	while (tok) {
 
@@ -335,6 +353,7 @@ send_whisper(char *msg, client_t *sender)
 	/* Find the client fd and send the message. */
 	pthread_mutex_lock(&client_mutex);
 
+	int found = 0;
 	for (int i = 0; i < MAX_CLIENTS; ++i)
 		if (g_clients[i] && strcmp(g_clients[i]->name, name) == 0) {
 			char buff[BUFF_SIZE] = "";
@@ -344,13 +363,24 @@ send_whisper(char *msg, client_t *sender)
 			if (send(g_clients[i]->fd, buff, sizeof(buff), 0) == -1)
 				perror("Error sending whisper: ");
 
+			found = 1;
 			break;
 		}
+
+	if (!found)
+		if (send(sender->fd, "Client not found.\n", MSG_SIZE, 0) == -1)
+			perror("Error sending whisper, client not found: ");
+
 
 	pthread_mutex_unlock(&client_mutex);
 }
 
-void
+/*
+ * @brief Sends a message with the client list to CLIENT.
+ *
+ * @param[in] client Reciever of the message.
+ */
+static void
 send_list_clients(client_t *client)
 {
 	char msg[BUFF_SIZE] = "";
@@ -371,9 +401,20 @@ send_list_clients(client_t *client)
  *
  * @note The file has to be opened already.
  */
-void
+static void
 log_message(const char *msg)
 {
 	(void)fputs(msg, g_log_file);
 	fflush(g_log_file);
+}
+
+/*
+ * @brief Sets G_QUIT to 1 and thus the program terminates if someone
+ * presses Ctrl+C.
+ */
+static void
+sig_quit_program(int signo)
+{
+	g_quit = 1;
+	printf("Catched signal %d\n.", signo);
 }

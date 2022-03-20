@@ -18,8 +18,8 @@ between the server and its clients.
 - Multiple clients.
 - Signal handling.
 - Multi-threading.
-- Logging.
-- Private messages.
+- Logging public messages to file.
+- Private messages (whispers).
 - Listing users in chatroom.
 - IPv6.
 
@@ -40,5 +40,5 @@ Finally, run as many clients as you wish:
 
 # TODO
 
-- logging public chat
 - colors
+- trim messages

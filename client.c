@@ -39,7 +39,7 @@ typedef struct
 static Name_err_codes validate_name(const char*);
 static void *listen_from_server(void*);
 static void *prompt_user(void*);
-static void sig_quit_program(int signo);
+static void sig_quit_program(int);
 
 /* Globals. */
 volatile sig_atomic_t g_quit = 0;
@@ -143,7 +143,7 @@ main(void)
 	puts("Type !list to show all clients connected to the chatroom.");
 	puts("Type !whisp and the client name to send a private message.\n");
 
-	/* Handle SIGINT signal. */
+	/* Handle SIGINT. */
 	struct sigaction sact;
 	sact.sa_handler = sig_quit_program;
 	sigemptyset(&sact.sa_mask);
@@ -194,7 +194,7 @@ main(void)
  *
  * @param[in] name
  */
-Name_err_codes
+static Name_err_codes
 validate_name(const char *name)
 {
 	int len = strlen(name);
@@ -218,7 +218,7 @@ validate_name(const char *name)
  *
  * @return NULL
  */
-static void*
+static void *
 listen_from_server(void *arg)
 {
 	client_data_t *cdata = (client_data_t*) arg;
@@ -293,6 +293,10 @@ prompt_user(void *arg)
 	return NULL;
 }
 
+/*
+ * @brief Sets G_QUIT to 1 and thus the program terminates if someone
+ * presses Ctrl+C.
+ */
 static void
 sig_quit_program(int signo)
 {
