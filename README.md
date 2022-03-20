@@ -31,22 +31,22 @@ I have no experience with C whatsoever so please take this code with a grain of 
 
 1) Clone the repository.
 
-	git clone https://github.com/abc579/jubilant-happiness.git
+    git clone https://github.com/abc579/jubilant-happiness.git
 
 2) Compile.
 
-	cd jubilant-happiness
-	make
+    cd jubilant-happiness
+    make
 
 3) Run the server.
 
-	cd build
-	./server
+    cd build
+    ./server
 
 4) Run N clients and chat.
 
-	cd build
-	./client
+    cd build
+    ./client
 
 # Screenshots
 
