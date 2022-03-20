@@ -34,14 +34,14 @@ void* manage_client(void*);
 int client_exists(const char*);
 void broadcast_message(const char*, const int);
 void send_whisper(char *);
+void send_list_clients(client_t *);
 
 int
 main(void)
 {
 	int fd = 0;
 
-	if ((fd = socket(AF_INET6, SOCK_STREAM, 0)) == -1)
-	{
+	if ((fd = socket(AF_INET6, SOCK_STREAM, 0)) == -1) {
 		perror("Error creating the socket(): ");
 		return EXIT_FAILURE;
 	}
@@ -52,14 +52,12 @@ main(void)
 	sa6.sin6_port = htons(PORTNO);
 	sa6.sin6_addr = in6addr_any;
 
-	if ((bind(fd, (struct sockaddr*) &sa6, sizeof(sa6))) == -1)
-	{
+	if ((bind(fd, (struct sockaddr*) &sa6, sizeof(sa6))) == -1) {
 		perror("Error binding: ");
 		return EXIT_FAILURE;
 	}
 
-	if ((listen(fd, MAX_CLIENTS)) == -1)
-	{
+	if ((listen(fd, MAX_CLIENTS)) == -1) {
 		perror("Error listening: ");
 		return EXIT_FAILURE;
 	}
@@ -67,26 +65,20 @@ main(void)
 	/* Server ready and running. */
 	puts("Server started.");
 
-	while (1)
-	{
+	while (1) {
 		pthread_t tid;
 		struct sockaddr_in6 ca6; /* Client address. */
 		socklen_t ca6_len = sizeof(ca6);
-		int cfd = accept(fd, (struct sockaddr*) &ca6,
-				 (socklen_t*) &ca6_len);
+		int cfd = accept(fd, (struct sockaddr*) &ca6, (socklen_t*) &ca6_len);
 
 		char buff[BUFF_SIZE];
 
 		/* Check if server is full. */
-		if ((g_clients_connected + 1) > MAX_CLIENTS)
-		{
+		if ((g_clients_connected + 1) > MAX_CLIENTS) {
 			strcpy(buff, ERR_STATUS);
 
 			if ((send(cfd, buff, sizeof(buff), 0)) == -1)
-			{
-				perror("Error sending msg server "
-				       "full: ");
-			}
+				perror("Error sending msg server full: ");
 
 			close(cfd);
 			continue;
@@ -96,29 +88,24 @@ main(void)
 		strcpy(buff, OK_STATUS);
 
 		if ((send(cfd, buff, strlen(buff), 0)) == -1)
-		{
 			perror("Error sending ok msg: ");
-		}
 
 		char name[NAME_SIZE];
 		memset(name, '\0', sizeof(name));
 
 		/* Get client's name and check if it exists. */
-		if (recv(cfd, &name, sizeof(name), 0) == -1)
-		{
+		if (recv(cfd, &name, sizeof(name), 0) == -1) {
 			perror("Error recv'ing client name: ");
 			close(cfd);
 			continue;
 		}
 
-		if (client_exists(name))
-		{
+		if (client_exists(name)) {
 			strcpy(buff, ERR_STATUS);
+
 			if ((send(cfd, buff, strlen(buff), 0)) == -1)
-			{
-				perror("Error sending msg client "
-				       "exists: ");
-			}
+				perror("Error sending msg client exists: ");
+
 			close(cfd);
 			continue;
 		}
@@ -127,9 +114,7 @@ main(void)
 		strcpy(buff, OK_STATUS);
 
 		if ((send(cfd, buff, strlen(buff), 0)) == -1)
-		{
 			perror("Error sending ok msg: ");
-		}
 
 		client_t *c = create_client(name, g_client_id, cfd);
 		add_client(c);
@@ -137,13 +122,12 @@ main(void)
 		++g_clients_connected;
 		++g_client_id;
 
-		/* Notify everyone that someone connected. */
-		snprintf(buff, sizeof(buff), "%s has connected.\n",
-			 c->name);
-		printf(buff, c->name);
+		/* Notify everyone that someone has connected. */
+		snprintf(buff, sizeof(buff), "%s has connected.\n", c->name);
+		printf("%s", buff);
 		broadcast_message(buff, c->fd);
 
-		pthread_create(&tid, NULL, manage_client, (void*) c);
+		pthread_create(&tid, NULL, manage_client, (void *) c);
 	}
 
 	/* Cleanup. */
@@ -164,13 +148,10 @@ add_client(client_t *c)
 	pthread_mutex_lock(&client_mutex);
 
 	for (int i = 0; i < MAX_CLIENTS; ++i)
-	{
-		if (g_clients[i] == NULL)
-		{
+		if (g_clients[i] == NULL) {
 			g_clients[i] = c;
 			break;
 		}
-	}
 
 	pthread_mutex_unlock(&client_mutex);
 }
@@ -188,15 +169,12 @@ remove_client(const unsigned int id)
 	pthread_mutex_lock(&client_mutex);
 
 	for (int i = 0; i < MAX_CLIENTS; ++i)
-	{
-		if (g_clients[i] && g_clients[i]->id == id)
-		{
+		if (g_clients[i] && g_clients[i]->id == id) {
 			close(g_clients[i]->fd);
 			free(g_clients[i]);
 			g_clients[i] = NULL;
 			break;
 		}
-	}
 
 	pthread_mutex_unlock(&client_mutex);
 }
@@ -211,7 +189,7 @@ remove_client(const unsigned int id)
 client_t *
 create_client(char *name, unsigned int id, int fd)
 {
-	client_t *c = (client_t*) malloc(sizeof(client_t));
+	client_t *c = (client_t *) malloc(sizeof(client_t));
 	strcpy(c->name, name);
 	c->id = id;
 	c->fd = fd;
@@ -229,56 +207,28 @@ create_client(char *name, unsigned int id, int fd)
 void *
 manage_client(void *c)
 {
-	client_t *client = (client_t*) c;
+	client_t *client = (client_t *) c;
 
 	char msg[BUFF_SIZE];
 	int response = 0;
 
-	while (1)
-	{
+	while (1) {
 		memset(msg, '\0', sizeof(msg));
 
-		if ((response = recv(client->fd, msg, sizeof(msg), 0)) > 0)
-		{
-			if (strcmp(msg, LIST_CMD) == 0)
-			{
-				/* Construct a message with the list of users. */
-				memset(msg, '\0', sizeof(msg));
-				strcpy(msg, "\n");
-
-				for (int i = 0; i < MAX_CLIENTS && strlen(msg) < MSG_SIZE; ++i)
-				{
-					if (g_clients[i])
-					{
-						strcat(msg, g_clients[i]->name);
-						strcat(msg, "\n");
-					}
-				}
-
-				if (send(client->fd, msg, strlen(msg), 0) == -1)
-				{
-					perror("Error sending list of clients: ");
-					continue;
-				}
-			}
-			else if (strstr(msg, WHISP_CMD) != NULL)
-			{
+		if ((response = recv(client->fd, msg, sizeof(msg), 0)) > 0) {
+			if (strcmp(msg, LIST_CMD) == 0) {
+				send_list_clients(client);
+			} else if (strstr(msg, WHISP_CMD) != NULL) {
 				send_whisper(msg);
-			}
-			else
-			{
+			} else {
 				broadcast_message(msg, client->fd);
 			}
-		}
-		else if (response == 0)
-		{
+		} else if (response == 0) {
 			snprintf(msg, sizeof(msg), "%s has quit.\n", client->name);
 			broadcast_message(msg, client->fd);
 			printf("%s", msg);
 			break;
-		}
-		else
-		{
+		} else {
 			perror("Error recv'ing data from client: ");
 			break;
 		}
@@ -304,13 +254,10 @@ client_exists(const char *name)
 	pthread_mutex_lock(&client_mutex);
 
 	for (int i = 0; i < MAX_CLIENTS; ++i)
-	{
-		if (g_clients[i] && strcmp(g_clients[i]->name, name) == 0)
-		{
+		if (g_clients[i] && strcmp(g_clients[i]->name, name) == 0) {
 			pthread_mutex_unlock(&client_mutex);
 			return 1;
 		}
-	}
 
 	pthread_mutex_unlock(&client_mutex);
 
@@ -321,8 +268,8 @@ client_exists(const char *name)
  * @brief Broadcasts message to everyone connected to the chat room
  * except the sender.
  *
- * @param[in] msg Message to send.
- * @param[in] fd File descriptor of the Sender.
+ * @param[in] msg Message.
+ * @param[in] fd Sender.
  */
 void
 broadcast_message(const char *msg, const int fd)
@@ -330,16 +277,9 @@ broadcast_message(const char *msg, const int fd)
 	pthread_mutex_lock(&client_mutex);
 
 	for (int i = 0; i < MAX_CLIENTS; ++i)
-	{
 		if (g_clients[i] && g_clients[i]->fd != fd)
-		{
 			if ((send(g_clients[i]->fd, msg, strlen(msg), 0)) == -1)
-			{
 				perror("Error broadcasting msg: ");
-			}
-
-		}
-	}
 
 	pthread_mutex_unlock(&client_mutex);
 }
@@ -356,26 +296,22 @@ send_whisper(char *msg)
 	char tmp[MSG_SIZE] = "";
 
 	for (size_t i = 0; i < strlen(msg); ++i)
-	{
 		tmp[i] = msg[i];
-	}
 
 	char name[NAME_SIZE] = "";
 	char contents[MSG_SIZE] = "";
 
 	int i = 0;
 	char *tok = strtok(tmp, " ");
-	while (tok)
-	{
+
+	while (tok) {
 		if (i == 1)
-		{
 			strcpy(name, tok);
-		}
-		else if (i > 1)
-		{
+		else if (i > 1) {
 			strcat(contents, tok);
 			strcat(contents, " ");
 		}
+
 		printf("%s\n", tok);
 		strtok(NULL, " ");
 		++i;
@@ -385,21 +321,32 @@ send_whisper(char *msg)
 	pthread_mutex_lock(&client_mutex);
 
 	for (int i = 0; i < MAX_CLIENTS; ++i)
-	{
-		if (g_clients[i] && strcmp(g_clients[i]->name, name) == 0)
-		{
+		if (g_clients[i] && strcmp(g_clients[i]->name, name) == 0) {
 			char buff[BUFF_SIZE] = "";
 
 			snprintf(buff, sizeof(buff), "_whisper_%s: %s\n", name, contents);
 
 			if (send(g_clients[i]->fd, buff, sizeof(buff), 0) == -1)
-			{
 				perror("Error sending whisper: ");
-			}
 
 			break;
 		}
-	}
 
 	pthread_mutex_unlock(&client_mutex);
+}
+
+void
+send_list_clients(client_t *client)
+{
+	char msg[BUFF_SIZE] = "";
+	strcpy(msg, "\n");
+
+	for (int i = 0; i < MAX_CLIENTS && strlen(msg) < MSG_SIZE; ++i)
+		if (g_clients[i]) {
+			strcat(msg, g_clients[i]->name);
+			strcat(msg, "\n");
+		}
+
+	if (send(client->fd, msg, strlen(msg), 0) == -1)
+		perror("Error sending list of clients: ");
 }

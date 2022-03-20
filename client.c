@@ -9,6 +9,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <time.h>
 #include "common.h"
 
 #define SERVER_IP "::1"
@@ -46,17 +47,12 @@ volatile sig_atomic_t g_quit = 0;
 int
 main(void)
 {
-	if (system("clear") < 0)
-	{
-		perror("Couldn't clear the screen: ");
-	}
+	(void)system("clear");
 
 	char name[NAME_SIZE] = "";
-
 	puts("Please type your name: ");
 
-	if ((fgets(name, NAME_SIZE, stdin)) == NULL)
-	{
+	if ((fgets(name, NAME_SIZE, stdin)) == NULL) {
 		perror("Error reading name: ");
 		return EXIT_FAILURE;
 	}
@@ -65,8 +61,7 @@ main(void)
 
 	Name_err_codes ne = validate_name(name);
 
-	switch (ne)
-	{
+	switch (ne) {
 	case NAME_ERR_MIN_LEN:
 		fprintf(stderr, "Your name has to be at least %d "
 				"characters long.", MIN_NAME_LEN);
@@ -84,8 +79,7 @@ main(void)
 
 	int sfd = 0; /* Server file descriptor. */
 
-	if ((sfd = socket(AF_INET6, SOCK_STREAM, 0)) == -1)
-	{
+	if ((sfd = socket(AF_INET6, SOCK_STREAM, 0)) == -1) {
 		perror("Error creating the socket(): ");
 		return EXIT_FAILURE;
 	}
@@ -96,33 +90,27 @@ main(void)
 	sa6.sin6_port = htons(PORTNO);
 	sa6.sin6_addr = in6addr_any;
 
-	if ((inet_pton(AF_INET6, SERVER_IP, &sa6.sin6_addr)) <= 0)
-	{
+	if ((inet_pton(AF_INET6, SERVER_IP, &sa6.sin6_addr)) <= 0) {
 		perror("Error calling inet_pton(): ");
 		return EXIT_FAILURE;
 	}
 
-	if ((connect(sfd, (struct sockaddr*) &sa6, sizeof(sa6))) == -1)
-	{
+	if ((connect(sfd, (struct sockaddr*) &sa6, sizeof(sa6))) == -1) {
 		perror("Error connecting to server: ");
-		fprintf(stderr, "Try again later.\n");
+		(void)fprintf(stderr, "Try again later.\n");
 		return EXIT_FAILURE;
 	}
 
 	char buff[BUFF_SIZE] = "";
 
 	/* Know if server rejected our connection. */
-	if ((recv(sfd, &buff, sizeof(buff), 0)) == -1)
-	{
-		perror("Error recv'ing status from server after "
-				"connecting: ");
+	if ((recv(sfd, &buff, sizeof(buff), 0)) == -1) {
+		perror("Error recv'ing status from server after connecting: ");
 		return EXIT_FAILURE;
 	}
 
-	if (strstr(buff, ERR_STATUS) != NULL)
-	{
-		fprintf(stderr, "The server is full. Please try "
-				"again later.\n");
+	if (strstr(buff, ERR_STATUS) != NULL) {
+		(void)fprintf(stderr, "The server is full. Please try again later.\n");
 		return EXIT_FAILURE;
 	}
 
@@ -130,22 +118,19 @@ main(void)
 	 * Send the name to the server so it can validate that no other
 	 * client exists with the same name.
 	 */
-	if ((send(sfd, name, strlen(name), 0)) == -1)
-	{
+	if ((send(sfd, name, strlen(name), 0)) == -1) {
 		perror("Error sending name to the server: ");
 		return EXIT_FAILURE;
 	}
 
 	memset(buff, 0, sizeof(buff));
-	if ((recv(sfd, &buff, sizeof(buff), 0)) == -1)
-	{
+	if ((recv(sfd, &buff, sizeof(buff), 0)) == -1) {
 		perror("Error recv'ing status from server after sending the name: ");
 		return EXIT_FAILURE;
 	}
 
-	if (strstr(buff, ERR_STATUS) != NULL)
-	{
-		fprintf(stderr, "Your name already exists. Try again.\n");
+	if (strstr(buff, ERR_STATUS) != NULL) {
+		(void)fprintf(stderr, "Your name already exists. Try again.\n");
 		return EXIT_FAILURE;
 	}
 
@@ -163,8 +148,8 @@ main(void)
 	sact.sa_handler = sig_quit_program;
 	sigemptyset(&sact.sa_mask);
 	sact.sa_flags = 0;
-	if (sigaction(SIGINT, &sact, NULL) == -1)
-	{
+
+	if (sigaction(SIGINT, &sact, NULL) == -1) {
 		perror("Error creating signal handler: ");
 		return EXIT_FAILURE;
 	}
@@ -174,25 +159,26 @@ main(void)
 	strcpy(cdata.name, name);
 	cdata.sfd = sfd;
 
-	if (pthread_create(&tid_server, NULL, listen_from_server, (void*) &cdata)
-			!= 0)
-	{
-		fprintf(stderr, "Error creating thread to listen to the server.\n");
+	if (pthread_create(&tid_server, NULL, listen_from_server, (void*) &cdata) != 0) {
+		(void)fprintf(stderr, "Error creating thread to listen to the server.\n");
 		return EXIT_FAILURE;
 	}
 
 	pthread_t tid_user;
 
-	if (pthread_create(&tid_user, NULL, prompt_user, (void*) &cdata) != 0)
-	{
-		fprintf(stderr, "Error creating thread to prompt the user.\n");
+	if (pthread_create(&tid_user, NULL, prompt_user, (void*) &cdata) != 0) {
+		(void)fprintf(stderr, "Error creating thread to prompt the user.\n");
 		return EXIT_FAILURE;
 	}
 
-	while (!g_quit)
-	{
-		/* TODO: Change this to nanoseconds. */
-		sleep(1);
+	struct timespec t;
+	t.tv_sec = 0;
+	t.tv_nsec = 500000000L;
+
+	while (!g_quit) {
+		struct timespec t2;
+		if (nanosleep(&t , &t2) < 0)
+			perror("nanosleep system call failed: ");
 	}
 
 	close(sfd);
@@ -240,24 +226,18 @@ listen_from_server(void *arg)
 	char msg[MSG_SIZE];
 	int res_recv = 0;
 
-	while (1)
-	{
+	while (1) {
 		memset(msg, 0, sizeof(msg));
 
-		if ((res_recv = recv(cdata->sfd, msg, BUFF_SIZE, 0)) > 0)
-		{
+		if ((res_recv = recv(cdata->sfd, msg, BUFF_SIZE, 0)) > 0) {
 			printf("%s", msg);
 			printf("> ");
 			fflush(stdout);
-		}
-		else if (res_recv == 0)
-		{
+		} else if (res_recv == 0) {
 			printf("Lost connection with the server.\n");
 			g_quit = 1;
 			break;
-		}
-		else
-		{
+		} else {
 			perror("Error receiving message from server: ");
 			g_quit = 1;
 			break;
@@ -282,47 +262,31 @@ prompt_user(void *arg)
 	char msg[MSG_SIZE];
 	char buff[BUFF_SIZE];
 
-	while (1)
-	{
+	while (1) {
 		memset(msg, 0, sizeof(msg));
 		memset(buff, 0, sizeof(buff));
 
 		printf("> ");
 		fflush(stdout);
 
-		if (fgets(msg, MSG_SIZE, stdin) == NULL)
-		{
+		if (fgets(msg, MSG_SIZE, stdin) == NULL) {
 			perror("Error getting user input: ");
 			continue;
 		}
 
 		msg[strcspn(msg, "\n")] = '\0';
 
-		if (strcmp(msg, QUIT_CMD) == 0)
-		{
+		if (strcmp(msg, QUIT_CMD) == 0) {
 			g_quit = 1;
 			break;
-		}
-		else if (strcmp(msg, LIST_CMD) == 0)
-		{
-			if (send(cdata->sfd, msg, strlen(msg),
-				 0) == -1)
-			{
-				perror("Error sending list message to"
-				       "the server: ");
-			}
-		}
-		else
-		{
-			snprintf(buff, sizeof(buff), "%s: %s\n",
-				 cdata->name, msg);
+		} else if (strcmp(msg, LIST_CMD) == 0) {
+			if (send(cdata->sfd, msg, strlen(msg), 0) == -1)
+				perror("Error sending list message to the server: ");
+		} else {
+			snprintf(buff, sizeof(buff), "%s: %s\n", cdata->name, msg);
 
-			if (send(cdata->sfd, buff, strlen(buff), 0)
-			    == -1)
-			{
-				perror("Error sending message to the "
-				       "server: ");
-			}
+			if (send(cdata->sfd, buff, strlen(buff), 0) == -1)
+				perror("Error sending message to the server: ");
 		}
 	}
 
