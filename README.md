@@ -27,7 +27,7 @@ between the server and its clients.
 
 First compile the project:
 
-	$ make run
+	$ make
 
 Then go to the `build` directory and run the server:
 
@@ -40,5 +40,5 @@ Finally, run as many clients as you wish:
 
 # TODO
 
-- private chat messages
 - logging public chat
+- colors

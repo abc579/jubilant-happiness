@@ -27,14 +27,14 @@ client_t *g_clients[MAX_CLIENTS];
 _Atomic unsigned int g_client_id = 1;
 
 /* Functions. */
-client_t* create_client(char*, unsigned int, int);
-void add_client(client_t*);
-void remove_client(const unsigned int);
-void* manage_client(void*);
-int client_exists(const char*);
-void broadcast_message(const char*, const int);
-void send_whisper(char *);
-void send_list_clients(client_t *);
+static client_t *create_client(char*, unsigned int, int);
+static void add_client(client_t*);
+static void remove_client(const unsigned int);
+static void *manage_client(void*);
+static int client_exists(const char*);
+static void broadcast_message(const char*, const int);
+static void send_whisper(char *, client_t *);
+static void send_list_clients(client_t *);
 
 int
 main(void)
@@ -219,7 +219,7 @@ manage_client(void *c)
 			if (strcmp(msg, LIST_CMD) == 0) {
 				send_list_clients(client);
 			} else if (strstr(msg, WHISP_CMD) != NULL) {
-				send_whisper(msg);
+				send_whisper(msg, client);
 			} else {
 				broadcast_message(msg, client->fd);
 			}
@@ -288,10 +288,10 @@ broadcast_message(const char *msg, const int fd)
  * @brief Parse MSG to extract the client that has to receive the message
  * and the actual message.
  *
- * msg format: !whisp name message
+ * msg format: "name: !whisp name2 message"
  */
 void
-send_whisper(char *msg)
+send_whisper(char *msg, client_t *sender)
 {
 	char tmp[MSG_SIZE] = "";
 
@@ -303,17 +303,18 @@ send_whisper(char *msg)
 
 	int i = 0;
 	char *tok = strtok(tmp, " ");
+	const int name_pos = 2;
 
 	while (tok) {
-		if (i == 1)
+
+		if (i == name_pos)
 			strcpy(name, tok);
-		else if (i > 1) {
+		else if (i > name_pos) {
 			strcat(contents, tok);
 			strcat(contents, " ");
 		}
 
-		printf("%s\n", tok);
-		strtok(NULL, " ");
+		tok = strtok(NULL, " ");
 		++i;
 	}
 
@@ -324,7 +325,7 @@ send_whisper(char *msg)
 		if (g_clients[i] && strcmp(g_clients[i]->name, name) == 0) {
 			char buff[BUFF_SIZE] = "";
 
-			snprintf(buff, sizeof(buff), "_whisper_%s: %s\n", name, contents);
+			snprintf(buff, sizeof(buff), "_whisper_ %s: %s\n", sender->name, contents);
 
 			if (send(g_clients[i]->fd, buff, sizeof(buff), 0) == -1)
 				perror("Error sending whisper: ");
