@@ -2,6 +2,10 @@
 
 /*
  * @brief Removes leading whitespaces.
+ *
+ * @param[in] msg
+ *
+ * @return MSG without leading whitespaces.
  */
 char *
 ltrim(char *msg)
@@ -20,6 +24,10 @@ ltrim(char *msg)
 
 /*
  * @brief Removes trailing whitespaces.
+
+ * @param[in] msg
+ *
+ * @return MSG without trailing whitespaces.
  */
 char *
 rtrim(char *msg)
@@ -40,6 +48,10 @@ rtrim(char *msg)
 
 /*
  * @brief Removes trailing and leading whitespaces.
+ *
+ * @param[in] msg
+ *
+ * @return MSG trimmed.
  */
 char *
 trim(char *msg)
@@ -52,7 +64,7 @@ trim(char *msg)
  * input is too large to hold in a char array and we want to recover.
  *
  * Why recover? because in this case, we won't have a newline
- * (since input is too big) and that will affect subsequent calls
+ * (since the input is too big) and that will affect subsequent calls
  * making a buggy behavior.
  */
 void

@@ -374,7 +374,9 @@ broadcast_message(const char *msg, client_t *sender, const msg_src ms)
  * @brief Parse MSG to extract the client that has to receive the message
  * and the actual message.
  *
- * msg format: "Clientname: !whisp receivername message"
+ * @param[in] msg format: "Clientname: !whisp receivername message"
+ * @param[in] sender
+ *
  */
 static void
 send_whisper(char *msg, client_t *sender)
@@ -435,7 +437,7 @@ send_whisper(char *msg, client_t *sender)
 /*
  * @brief Sends a message with the client list to CLIENT.
  *
- * @param[in] client Reciever of the message.
+ * @param[in] client Message receiver.
  */
 static void
 send_list_clients(client_t *client)
@@ -455,6 +457,8 @@ send_list_clients(client_t *client)
 /*
  * @brief Append MSG to the log file.
  *
+ * @param[in] MSG to be appended.
+ *
  * @note The file has to be opened already.
  */
 static void
@@ -467,6 +471,8 @@ log_message(const char *msg)
 /*
  * @brief Sets G_QUIT to 1 and thus the program terminates if someone
  * presses Ctrl+C.
+ *
+ * @param[in] signo Signal number.
  */
 static void
 sig_quit_program(int signo)
