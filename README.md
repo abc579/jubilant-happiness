@@ -24,7 +24,7 @@ I have no experience with C whatsoever so please take this code with a grain of 
 - Private messages (whispers).
 - Listing users in chatroom.
 - IPv6.
-- Client name colours.
+- Up to seven unique client name colours.
 - Trimmed messages.
 
 # Usage
@@ -55,3 +55,6 @@ TODO
 # TODO
 
 - Leak analysis.
+- New username validation: isalpha.
+- Specify colors limit in readme.
+- Specify default color.
