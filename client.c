@@ -16,7 +16,6 @@
 #define SERVER_IP "::1"
 #define PORTNO 6969
 #define QUIT_CMD "!quit"
-#define MIN_NAME_LEN 3
 
 /* User-defined types. */
 typedef enum
