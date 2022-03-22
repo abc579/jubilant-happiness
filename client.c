@@ -55,9 +55,13 @@ main(void)
 	char name[NAME_SIZE] = "";
 	puts("Please type your name: ");
 
-	if ((fgets(name, NAME_SIZE, stdin)) == NULL) {
+	if ((fgets(name, NAME_SIZE - 1, stdin)) == NULL) {
 		perror("Error reading name: ");
 		return EXIT_FAILURE;
+	}
+
+	if (name[strlen(name) - 1] != '\n') { /* Name too long. */
+		flush_endl();
 	}
 
 	name[strcspn(name, "\n")] = '\0'; /* Get rid of the newline. */
@@ -276,10 +280,7 @@ prompt_user(void *arg)
 		}
 
 		if (msg[strlen(msg) - 1] != '\n') { /* Message too long. */
-			/* Flush to end of line so next call won't be affected. */
-			int ch;
-			while (((ch = getchar()) != '\n') && (ch != EOF))
-				;
+			flush_endl();
 		}
 
 		trim(msg);

@@ -394,7 +394,7 @@ send_whisper(char *msg, client_t *sender)
 
 	while (tok) {
 		if (i == name_pos)
-			strncpy(name, tok, NAME_SIZE);
+			strncpy(name, tok, NAME_SIZE - 1);
 		else if (i > name_pos) {
 			strcat(contents, tok);
 			strcat(contents, " ");

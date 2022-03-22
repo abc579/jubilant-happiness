@@ -13,11 +13,13 @@ Small C chat application using sockets.
 This is a small C chat application that uses sockets to communicate
 between the server and its clients.
 
-I have no experience with C whatsoever so please take this code with a grain of salt.
+I have no experience with C whatsoever so please take this code with
+a grain of salt.
 
 # Features
 
-- Up to seven clients. You can change it. If you do, remember to add colours as well.
+- Up to seven clients. You can change it. If you do, remember to add
+  colours as well.
 - Signal handling.
 - Multi-threading.
 - Logging public messages to file.
@@ -25,7 +27,7 @@ I have no experience with C whatsoever so please take this code with a grain of 
 - Listing users in chatroom.
 - IPv6.
 - Up to seven unique client name colours.
-- Trimmed messages.
+- Trimmed and truncated messages. (trying to avoid buffer overflows)
 
 # Usage
 
@@ -55,4 +57,3 @@ Run N clients and chat.
 # TODO
 
 - Leak analysis.
-- New username validation: isalpha.

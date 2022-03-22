@@ -7,3 +7,4 @@
 char *ltrim(char *);
 char *rtrim(char *);
 char *trim(char *);
+void flush_endl(void);
