@@ -22,8 +22,9 @@ a grain of salt.
   colours as well.
 - Signal handling.
 - Multi-threading.
-- Logging public messages to file.
-- Private messages (whispers).
+- Logging public messages to file. The file `log.txt` gets created
+  while chatting. It only logs public messages.
+- Private messages (whispers). Shown as italic text.
 - Listing users in chatroom.
 - IPv6.
 - Up to seven unique client name colours.
@@ -54,6 +55,4 @@ Run N clients and chat.
 
 ![Example](example/sample.png?raw=true "Chat example")
 
-# TODO
-
-- Leak analysis.
+![Whispers](example/whispers.png?raw=true "Whispers example")

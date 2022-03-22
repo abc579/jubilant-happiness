@@ -411,7 +411,7 @@ send_whisper(char *msg, client_t *sender)
 	char buff[BUFF_SIZE] = "Client not found.\n";
 	for (int i = 0; i < MAX_CLIENTS; ++i)
 		if (g_clients[i] && strcmp(g_clients[i]->name, name) == 0) {
-			snprintf(buff, sizeof(buff), "_whisper_ %s%s%s: %s\n",
+			snprintf(buff, sizeof(buff), "%s\x1B[3m%s\x1B%s: %s\n", /* Print name with italic style. */
 				 sender->colour,
 				 sender->name,
 				 RESET,
