@@ -50,7 +50,7 @@ Run N clients and chat.
 
 # Screenshots
 
-TODO
+![Example](example/sample.png?raw=true "Chat example")
 
 # TODO
 
