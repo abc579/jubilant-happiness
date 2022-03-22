@@ -48,7 +48,9 @@ volatile sig_atomic_t g_quit = 0;
 int
 main(void)
 {
-	(void)system("clear");
+	if (system("clear") == -1) {
+		perror("Couldn't execute clear: ");
+	}
 
 	char name[NAME_SIZE] = "";
 	puts("Please type your name: ");
@@ -224,7 +226,7 @@ listen_from_server(void *arg)
 {
 	client_data_t *cdata = (client_data_t*) arg;
 
-	char msg[MSG_SIZE];
+	char msg[BUFF_SIZE];
 	int res_recv = 0;
 
 	while (1) {
@@ -268,9 +270,16 @@ prompt_user(void *arg)
 		printf("> ");
 		fflush(stdout);
 
-		if (fgets(msg, MSG_SIZE, stdin) == NULL) {
+		if (fgets(msg, MSG_SIZE - 1, stdin) == NULL) {
 			perror("Error getting user input: ");
 			continue;
+		}
+
+		if (msg[strlen(msg) - 1] != '\n') { /* Message too long. */
+			/* Flush to end of line so next call won't be affected. */
+			int ch;
+			while (((ch = getchar()) != '\n') && (ch != EOF))
+				;
 		}
 
 		trim(msg);

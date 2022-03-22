@@ -17,7 +17,7 @@ I have no experience with C whatsoever so please take this code with a grain of 
 
 # Features
 
-- Multiple clients.
+- Up to seven clients. You can change it. If you do, remember to add colours as well.
 - Signal handling.
 - Multi-threading.
 - Logging public messages to file.
@@ -56,5 +56,3 @@ Run N clients and chat.
 
 - Leak analysis.
 - New username validation: isalpha.
-- Specify colors limit in readme.
-- Specify default color.

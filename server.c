@@ -11,7 +11,7 @@
 
 /* Constants. */
 #define PORTNO 6969
-#define MAX_CLIENTS 5
+#define MAX_CLIENTS 7
 #define LOG_FILE_NAME "log.txt"
 
 #define COLOUR_SIZE 20
@@ -130,7 +130,7 @@ main(void)
 		if ((g_clients_connected + 1) > MAX_CLIENTS) {
 			strcpy(buff, ERR_STATUS);
 
-			if ((send(cfd, buff, sizeof(buff), 0)) == -1)
+			if ((send(cfd, buff, strlen(buff), 0)) == -1)
 				perror("Error sending msg server full: ");
 
 			close(cfd);
@@ -255,6 +255,7 @@ create_client(char *name, unsigned int id, int fd)
 	strcpy(c->name, name);
 	c->id = id;
 	c->fd = fd;
+	strcpy(c->colour, RESET);
 
 	/* Assign a colour that is not yet used. */
 	for (int i = 0; i < TOTAL_COLOURS; ++i)
@@ -392,9 +393,8 @@ send_whisper(char *msg, client_t *sender)
 	char *tok = strtok(tmp, " ");
 
 	while (tok) {
-
 		if (i == name_pos)
-			strcpy(name, tok);
+			strncpy(name, tok, NAME_SIZE);
 		else if (i > name_pos) {
 			strcat(contents, tok);
 			strcat(contents, " ");
@@ -408,17 +408,16 @@ send_whisper(char *msg, client_t *sender)
 	pthread_mutex_lock(&client_mutex);
 
 	int found = 0;
+	char buff[BUFF_SIZE] = "Client not found.\n";
 	for (int i = 0; i < MAX_CLIENTS; ++i)
 		if (g_clients[i] && strcmp(g_clients[i]->name, name) == 0) {
-			char buff[BUFF_SIZE] = "";
-
 			snprintf(buff, sizeof(buff), "_whisper_ %s%s%s: %s\n",
 				 sender->colour,
 				 sender->name,
 				 RESET,
 				 contents);
 
-			if (send(g_clients[i]->fd, buff, sizeof(buff), 0) == -1)
+			if (send(g_clients[i]->fd, buff, strlen(buff), 0) == -1)
 				perror("Error sending whisper: ");
 
 			found = 1;
@@ -426,7 +425,7 @@ send_whisper(char *msg, client_t *sender)
 		}
 
 	if (!found)
-		if (send(sender->fd, "Client not found.\n", MSG_SIZE, 0) == -1)
+		if (send(sender->fd, buff, strlen(buff), 0) == -1)
 			perror("Error sending whisper, client not found: ");
 
 
@@ -441,8 +440,7 @@ send_whisper(char *msg, client_t *sender)
 static void
 send_list_clients(client_t *client)
 {
-	char msg[BUFF_SIZE] = "";
-	strcpy(msg, "\n");
+	char msg[BUFF_SIZE] = "\n";
 
 	for (int i = 0; i < MAX_CLIENTS && strlen(msg) < MSG_SIZE; ++i)
 		if (g_clients[i]) {
