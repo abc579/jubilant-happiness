@@ -11,4 +11,4 @@ build:
 	mkdir -p build
 
 clean:
-	rm *.o
+	rm -rf build
