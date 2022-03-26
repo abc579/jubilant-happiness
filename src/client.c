@@ -57,7 +57,7 @@ static void *prompt_user(void *);
 static void sig_quit_program(int);
 static void print_welcome(void);
 static int setup_signals(void);
-static void cleanup(int *);
+static void cleanup(int);
 
 volatile sig_atomic_t g_quit = 0;
 
@@ -92,7 +92,7 @@ main(void)
 			continue;
 			break;
 		case NAME_SYSTEM_ERR:
-			fprintf(stderr, "Error reading user name: %s\n.", strerror(necw.system_errno));
+			fprintf(stderr, "Error reading user name%s\n.", strerror(necw.system_errno));
 			continue;
 			break;
 		case NAME_OK:
@@ -103,19 +103,19 @@ main(void)
 
 		switch (cecw.conn_err) {
 		case CONN_SOCKET_ERR:
-			fprintf(stderr, "Error creating socket: %s\n", strerror(cecw.system_errno));
+			fprintf(stderr, "Error creating socket%s\n", strerror(cecw.system_errno));
 			continue;
 			break;
 		case CONN_PTON_ERR:
-			fprintf(stderr, "Error calling inet_pton(): %s\n", strerror(cecw.system_errno));
+			fprintf(stderr, "Error calling inet_pton()%s\n", strerror(cecw.system_errno));
 			continue;
 			break;
 		case CONN_CONNECT_ERR:
-			fprintf(stderr, "Error connecting to server: %s\n", strerror(cecw.system_errno));
+			fprintf(stderr, "Error connecting to server%s\n", strerror(cecw.system_errno));
 			continue;
 			break;
 		case CONN_RECV_ERR:
-			fprintf(stderr, "Error receiving data from server: %s\n", strerror(cecw.system_errno));
+			fprintf(stderr, "Error receiving data from server%s\n", strerror(cecw.system_errno));
 			continue;
 			break;
 		case CONN_SV_FULL_ERR:
@@ -131,11 +131,11 @@ main(void)
 
 		switch (ruscw.reg_err) {
 		case REGUSR_SEND_ERR:
-			fprintf(stderr, "Error sending name to server: %s\n", strerror(ruscw.system_errno));
+			fprintf(stderr, "Error sending name to server%s\n", strerror(ruscw.system_errno));
 			continue;
 			break;
 		case REGUSR_RECV_ERR:
-			fprintf(stderr, "Error receiving data to server: %s\n", strerror(ruscw.system_errno));
+			fprintf(stderr, "Error receiving data to server%s\n", strerror(ruscw.system_errno));
 			continue;
 			break;
 		case REGUSR_NAME_EXISTS_ERR:
@@ -184,7 +184,7 @@ main(void)
 	}
 
 	puts("Goodbye.");
-	cleanup(&sfd);
+	cleanup(sfd);
 
 	return EXIT_SUCCESS;
 }
@@ -431,7 +431,7 @@ setup_signals(void)
 }
 
 static void
-cleanup(int *sfd)
+cleanup(int sfd)
 {
-	close(*sfd);
+	close(sfd);
 }
