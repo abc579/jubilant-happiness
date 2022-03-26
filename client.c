@@ -18,7 +18,6 @@
 #define PORTNO 6969
 #define QUIT_CMD "!quit"
 
-/* User-defined types. */
 typedef enum {
 	NAME_ERR_MIN_LEN,
 	NAME_ERR_MAX_LEN,
@@ -63,11 +62,10 @@ typedef struct {
 } User_t;
 
 typedef struct {
-	char name[NAME_SIZE];
+	User_t *user;
 	int sfd; /* Server to which the client is connected. */
-} client_data_t;
+} Client_data_t;
 
-/* Functions. */
 static Name_status_codes validate_name(const char *);
 static Name_status_codes_wrapper get_name(char *);
 static Connection_status_codes_wrapper connect_to_server(struct sockaddr_in6 *,
@@ -78,6 +76,7 @@ static void *prompt_user(void *);
 static void sig_quit_program(int);
 static void print_welcome(void);
 static int setup_signals(void);
+static void cleanup(int *);
 
 /* Globals. */
 volatile sig_atomic_t g_quit = 0;
@@ -101,16 +100,20 @@ main(void)
 
 		switch (necw.name_err) {
 		case NAME_ERR_MIN_LEN:
-			fprintf(stderr, "Your name has to be at least %d characters long.", MIN_NAME_LEN);
+			fprintf(stderr, "Your name has to be at least %d characters long.\n", MIN_NAME_LEN);
+			continue;
 			break;
 		case NAME_ERR_MAX_LEN:
-			fprintf(stderr, "Your name can't exceed %d characters long.", NAME_SIZE);
+			fprintf(stderr, "Your name can't exceed %d characters long.\n", NAME_SIZE);
+			continue;
 			break;
 		case NAME_ERR_WSPACE:
-			fprintf(stderr, "Your name can't contain a whitespace in between.");
+			fprintf(stderr, "Your name can't contain a whitespace in between.\n");
+			continue;
 			break;
 		case NAME_SYSTEM_ERR:
 			fprintf(stderr, "Error reading user name: %s\n.", strerror(necw.system_errno));
+			continue;
 			break;
 		case NAME_OK:
 			break;
@@ -121,36 +124,43 @@ main(void)
 		switch (cecw.conn_err) {
 		case CONN_SOCKET_ERR:
 			fprintf(stderr, "Error creating socket: %s\n", strerror(cecw.system_errno));
+			continue;
 			break;
 		case CONN_PTON_ERR:
 			fprintf(stderr, "Error calling inet_pton(): %s\n", strerror(cecw.system_errno));
+			continue;
 			break;
 		case CONN_CONNECT_ERR:
 			fprintf(stderr, "Error connecting to server: %s\n", strerror(cecw.system_errno));
+			continue;
 			break;
 		case CONN_RECV_ERR:
 			fprintf(stderr, "Error receiving data from server: %s\n", strerror(cecw.system_errno));
+			continue;
 			break;
 		case CONN_SV_FULL_ERR:
 			fprintf(stderr, "The server is full. Please try again.\n");
+			continue;
 			break;
 		case CONN_OK:
 			break;
 		}
 
 		strcpy(user.name, name);
-
-		Register_user_status_codes_wrapper ruscw = register_user(&user, sfd);
+                Register_user_status_codes_wrapper ruscw = register_user(&user, sfd);
 
 		switch (ruscw.reg_err) {
 		case REGUSR_SEND_ERR:
 			fprintf(stderr, "Error sending name to server: %s\n", strerror(ruscw.system_errno));
+			continue;
 			break;
 		case REGUSR_RECV_ERR:
 			fprintf(stderr, "Error receiving data to server: %s\n", strerror(ruscw.system_errno));
+			continue;
 			break;
 		case REGUSR_NAME_EXISTS_ERR:
-			fprintf(stderr, "Your name already exists in the server. Please, try again.");
+			fprintf(stderr, "Your name already exists in the server. Please, try again.\n");
+			continue;
 			break;
 		case REGUSR_OK:
 			username_ok = 1;
@@ -167,8 +177,8 @@ main(void)
 	print_welcome();
 
 	pthread_t tid_server;
-	client_data_t cdata;
-	strcpy(cdata.name, user.name);
+	Client_data_t cdata;
+	cdata.user = &user;
 	cdata.sfd = sfd;
 
 	if (pthread_create(&tid_server, NULL, listen_from_server, (void*) &cdata) != 0) {
@@ -193,9 +203,8 @@ main(void)
 			perror("nanosleep system call failed: ");
 	}
 
-	close(sfd);
-
 	puts("Goodbye.");
+	cleanup(&sfd);
 
 	return EXIT_SUCCESS;
 }
@@ -235,7 +244,7 @@ validate_name(const char *name)
 static void *
 listen_from_server(void *arg)
 {
-	client_data_t *cdata = (client_data_t *) arg;
+	Client_data_t *cdata = (Client_data_t *) arg;
 
 	char msg[BUFF_SIZE];
 	int res_recv = 0;
@@ -271,7 +280,7 @@ listen_from_server(void *arg)
 static void*
 prompt_user(void *arg)
 {
-	client_data_t *cdata = (client_data_t *) arg;
+	Client_data_t *cdata = (Client_data_t *) arg;
 
 	char msg[MSG_SIZE];
 
@@ -454,4 +463,10 @@ setup_signals(void)
 	sact.sa_flags = 0;
 
 	return sigaction(SIGINT, &sact, NULL);
+}
+
+static void
+cleanup(int *sfd)
+{
+	close(*sfd);
 }
