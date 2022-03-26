@@ -12,24 +12,11 @@
 #include <time.h>
 #include <errno.h>
 #include "common.h"
-#include "utils.h"
+#include "user.h"
 
 #define SERVER_IP "::1"
 #define PORTNO 6969
 #define QUIT_CMD "!quit"
-
-typedef enum {
-	NAME_ERR_MIN_LEN,
-	NAME_ERR_MAX_LEN,
-	NAME_ERR_WSPACE,
-	NAME_SYSTEM_ERR,
-	NAME_OK
-} Name_status_codes;
-
-typedef struct {
-	Name_status_codes name_err;
-	int system_errno;
-} Name_status_codes_wrapper;
 
 typedef enum {
 	CONN_SOCKET_ERR,
@@ -58,16 +45,10 @@ typedef struct {
 } Register_user_status_codes_wrapper;
 
 typedef struct {
-	char name[NAME_SIZE];
-} User_t;
-
-typedef struct {
 	User_t *user;
 	int sfd; /* Server to which the client is connected. */
 } Client_data_t;
 
-static Name_status_codes validate_name(const char *);
-static Name_status_codes_wrapper get_name(char *);
 static Connection_status_codes_wrapper connect_to_server(struct sockaddr_in6 *,
                                                      size_t, int *);
 static Register_user_status_codes_wrapper register_user(User_t *, const int);
@@ -209,30 +190,6 @@ main(void)
 	return EXIT_SUCCESS;
 }
 
-
-/* @TODO: create new file user.h */
-/*
- * @brief Returns NAME_OK if validations were successful. Otherwise, it will
- * return the corresponding enumerator indicating which error NAME has.
- *
- * @param[in] name
- */
-static Name_status_codes
-validate_name(const char *name)
-{
-	int len = strlen(name);
-
-	if (len > NAME_SIZE - 1)
-		return NAME_ERR_MAX_LEN;
-	else if (len < MIN_NAME_LEN)
-		return NAME_ERR_MIN_LEN;
-
-	if (strstr(name, " ") != NULL)
-		return NAME_ERR_WSPACE;
-
-	return NAME_OK;
-}
-
 /*
  * @brief Listens to server's messages.
  * Every message received will get printed to client's console.
@@ -272,12 +229,11 @@ listen_from_server(void *arg)
 
 /*
  * @brief Prompt the user to write a message.
- * The message will get formatted to something like this:
- * "username: message"
+ * The message will get formatted to something like this: "username: message"
  *
  * @return NULL
  */
-static void*
+static void *
 prompt_user(void *arg)
 {
 	Client_data_t *cdata = (Client_data_t *) arg;
@@ -295,7 +251,7 @@ prompt_user(void *arg)
 			continue;
 		}
 
-		if (msg[strlen(msg) - 1] != '\n') { /* Message too long. */
+		if (msg[strlen(msg) - 1] != '\n') { /* Message too long; avoid overflow. */
 			flush_endl();
 		}
 
@@ -317,6 +273,8 @@ prompt_user(void *arg)
 /*
  * @brief Sets G_QUIT to 1 and thus the program terminates if someone
  * presses Ctrl+C.
+ *
+ * @param[in] signo We don't do anything with it at the moment.
  */
 static void
 sig_quit_program(int signo)
@@ -325,31 +283,15 @@ sig_quit_program(int signo)
 	printf("Catched signal %d\n.", signo);
 }
 
-/* @TODO: create new file user.h */
-static Name_status_codes_wrapper
-get_name(char *name)
-{
-	Name_status_codes_wrapper necw;
-
-	if ((fgets(name, NAME_SIZE - 1, stdin)) == NULL) {
-		necw.name_err = NAME_SYSTEM_ERR;
-		necw.system_errno = errno;
-		return necw;
-	}
-
-	if (name[strlen(name) - 1] != '\n') { /* Name too long. */
-		flush_endl();
-	}
-
-	name[strcspn(name, "\n")] = '\0'; /* Get rid of the newline. */
-
-	Name_status_codes ne = validate_name(name);
-	necw.name_err = ne;
-	necw.system_errno = 0;
-
-	return necw;
-}
-
+/*
+ * @brief Prepare the connection and connect to the server identified by SFD.
+ *
+ * @param[in out] sa6 Server's socket data to be filled.
+ * @param[in] sa6_size sizeof(sa6)
+ * @param[in out] sfd Server's file descriptor.
+ *
+ * @return The corresponding enumerator indicating success or error.
+ */
 static Connection_status_codes_wrapper
 connect_to_server(struct sockaddr_in6 *sa6, size_t sa6_size, int *sfd)
 {
@@ -403,6 +345,11 @@ connect_to_server(struct sockaddr_in6 *sa6, size_t sa6_size, int *sfd)
 /*
  * @brief Send the name to the server so it can validate that no other
  * client exists with the same name.
+ *
+ * @param[in] user
+ * @param[in] sfd Server's file descriptor.
+ *
+ * @return The corresponding enumerator indicating success or error.
  */
 static Register_user_status_codes_wrapper
 register_user(User_t *user, const int sfd)
@@ -436,6 +383,9 @@ register_user(User_t *user, const int sfd)
 	return ruscw;
 }
 
+/*
+ * @brief Prints welcome message and instructions.
+ */
 static void
 print_welcome(void)
 {
