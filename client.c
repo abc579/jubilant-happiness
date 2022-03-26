@@ -89,6 +89,11 @@ main(void)
 		perror("Couldn't execute clear: ");
 	}
 
+	int sfd = 0;
+	struct sockaddr_in6 sa6;
+	User_t user;
+
+	int username_ok = 0;
 	do {
 		puts("Please type your name: ");
 		char name[NAME_SIZE] = "";
@@ -96,22 +101,21 @@ main(void)
 
 		switch (necw.name_err) {
 		case NAME_ERR_MIN_LEN:
-			fprintf(stderr, "Your name has to be at least %d "
-				"characters long.", MIN_NAME_LEN);
+			fprintf(stderr, "Your name has to be at least %d characters long.", MIN_NAME_LEN);
 			break;
 		case NAME_ERR_MAX_LEN:
-			fprintf(stderr, "Your name can't exceed %d characters"
-				" long.", NAME_SIZE);
+			fprintf(stderr, "Your name can't exceed %d characters long.", NAME_SIZE);
 			break;
 		case NAME_ERR_WSPACE:
 			fprintf(stderr, "Your name can't contain a whitespace in between.");
+			break;
+		case NAME_SYSTEM_ERR:
+			fprintf(stderr, "Error reading user name: %s\n.", strerror(necw.system_errno));
 			break;
 		case NAME_OK:
 			break;
 		}
 
-		struct sockaddr_in6 sa6;
-		int sfd = 0;
 		Connection_status_codes_wrapper cecw = connect_to_server(&sa6, sizeof(sa6), &sfd);
 
 		switch (cecw.conn_err) {
@@ -134,10 +138,9 @@ main(void)
 			break;
 		}
 
-		User_t user;
 		strcpy(user.name, name);
 
-		Register_user_status_codes_wrapper ruscw = register_user(user, sfd);
+		Register_user_status_codes_wrapper ruscw = register_user(&user, sfd);
 
 		switch (ruscw.reg_err) {
 		case REGUSR_SEND_ERR:
@@ -150,34 +153,34 @@ main(void)
 			fprintf(stderr, "Your name already exists in the server. Please, try again.");
 			break;
 		case REGUSR_OK:
+			username_ok = 1;
 			break;
 		}
 
-		if (setup_signals() == -1) {
-			perror("Error setting up signals: ");
-			exit(EXIT_FAILURE);
-		}
+	} while (!username_ok);
 
-		print_welcome();
+	if (setup_signals() == -1) {
+		perror("Error setting up signals: ");
+		exit(EXIT_FAILURE);
+	}
 
-	} while ();
-
+	print_welcome();
 
 	pthread_t tid_server;
 	client_data_t cdata;
-	strcpy(cdata.name, name);
+	strcpy(cdata.name, user.name);
 	cdata.sfd = sfd;
 
 	if (pthread_create(&tid_server, NULL, listen_from_server, (void*) &cdata) != 0) {
-		(void)fprintf(stderr, "Error creating thread to listen to the server.\n");
-		return EXIT_FAILURE;
+		fprintf(stderr, "Error creating thread to listen to the server.\n");
+		exit(EXIT_FAILURE);
 	}
 
 	pthread_t tid_user;
 
 	if (pthread_create(&tid_user, NULL, prompt_user, (void*) &cdata) != 0) {
-		(void)fprintf(stderr, "Error creating thread to prompt the user.\n");
-		return EXIT_FAILURE;
+		fprintf(stderr, "Error creating thread to prompt the user.\n");
+		exit(EXIT_FAILURE);
 	}
 
 	struct timespec t;
@@ -232,7 +235,7 @@ validate_name(const char *name)
 static void *
 listen_from_server(void *arg)
 {
-	client_data_t *cdata = (client_data_t*) arg;
+	client_data_t *cdata = (client_data_t *) arg;
 
 	char msg[BUFF_SIZE];
 	int res_recv = 0;
@@ -350,18 +353,18 @@ connect_to_server(struct sockaddr_in6 *sa6, size_t sa6_size, int *sfd)
 		return cecw;
 	}
 
-	memset(&sa6, 0, sa6_size);
+	memset(sa6, 0, sa6_size);
 	sa6->sin6_family = AF_INET6;
 	sa6->sin6_port = htons(PORTNO);
 	sa6->sin6_addr = in6addr_any;
 
-	if ((inet_pton(AF_INET6, SERVER_IP, &sa6->sin6_addr)) <= 0) {
+	if ((inet_pton(AF_INET6, SERVER_IP, &(sa6->sin6_addr))) <= 0) {
 		cecw.conn_err = CONN_PTON_ERR;
 		cecw.system_errno = errno;
 		return cecw;
 	}
 
-	if ((connect(*sfd, (struct sockaddr*) &sa6, sa6_size)) == -1) {
+	if ((connect(*sfd, (struct sockaddr*) sa6, sa6_size)) == -1) {
 		cecw.conn_err = CONN_CONNECT_ERR;
 		cecw.system_errno = errno;
 		return cecw;
