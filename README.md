@@ -53,12 +53,6 @@ Run N clients and chat.
 
 # Screenshots
 
-![Example](example/sample.png?raw=true "Chat example")
+![Example](assets/sample.png?raw=true "Chat example")
 
-![Whispers](example/whispers.png?raw=true "Whispers example")
-
-# TODO
-
-- Don't close the program when the username already exists. (misleading msg)
-- Rename example to screenshots.
-- Creating a new file to store technical errors.
+![Whispers](assets/whispers.png?raw=true "Whispers example")
