@@ -8,9 +8,9 @@
 #include <unistd.h>
 #include <signal.h>
 #include <time.h>
+#include <errno.h>
 #include "common.h"
 
-/* Constants. */
 #define PORTNO 6969
 #define MAX_CLIENTS 7
 #define LOG_FILE_NAME "log.txt"
@@ -26,34 +26,53 @@
 #define WHITE "\x1B[37m"
 #define RESET "\x1B[0m"
 
-/* User-defined types. */
 typedef struct {
 	char name[NAME_SIZE];
 	unsigned int id;
 	int fd;
 	char colour[COLOUR_SIZE];
-} client_t;
+} Client_t;
 
 typedef struct {
 	char colour[COLOUR_SIZE];
 	int used;
-} chat_colours_t;
+} Chat_colours_t;
 
 typedef enum {
 	SRC_SERVER,
 	SRC_CLIENT
-} msg_src;
+} Message_source;
 
-/* Mutexes. */
+typedef enum {
+	NEW_CONN_SV_FULL_ERR,
+	NEW_CONN_SYSTEM_ERR,
+	NEW_CONN_OK
+} New_connection_status_codes;
+
+typedef struct {
+	New_connection_status_codes nconn_err;
+	int system_err;
+} New_connection_status_codes_wrapper;
+
+typedef enum {
+	CL_NAME_EXISTS_ERR,
+	CL_NAME_SYSTEM_ERR,
+	CL_NAME_OK
+} Client_name_status_codes;
+
+typedef struct {
+	Client_name_status_codes cname_err;
+	int system_err;
+} Client_name_status_codes_wrapper;
+
 pthread_mutex_t client_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-/* Globals. */
 static _Atomic unsigned int g_clients_connected = 0;
-static client_t *g_clients[MAX_CLIENTS];
+static Client_t *g_clients[MAX_CLIENTS];
 static _Atomic unsigned int g_client_id = 1;
 static FILE *g_log_file;
 static int g_quit = 0;
-static chat_colours_t g_colours_used[TOTAL_COLOURS] =
+static Chat_colours_t g_colours_used[TOTAL_COLOURS] =
 {
 	{RED, 0},
 	{GREEN, 0},
@@ -64,119 +83,87 @@ static chat_colours_t g_colours_used[TOTAL_COLOURS] =
 	{WHITE, 0}
 };
 
-/* Functions. */
-static client_t *create_client(char *, unsigned int, int);
-static void add_client(client_t *);
+static Client_t *create_client(char *, unsigned int, int);
+static void add_client(Client_t *);
 static void remove_client(const unsigned int);
 static void *manage_client(void *);
 static int client_exists(const char *);
-static void broadcast_message(const char*, client_t *, const msg_src);
-static void send_whisper(char *, client_t *);
-static void send_list_clients(client_t *);
-static void log_message(const char *, client_t *, const msg_src);
+static void broadcast_message(const char*, Client_t *, const Message_source);
+static void send_whisper(char *, Client_t *);
+static void send_list_clients(Client_t *);
+static void log_message(const char *, Client_t *, const Message_source);
 static void sig_quit_program(int);
+static int setup_signals(void);
+static int prepare_server(struct sockaddr_in6 *, size_t, int *);
+static New_connection_status_codes_wrapper process_new_connection(const int);
+static Client_name_status_codes_wrapper process_client_name(const int, char *,
+                                                            const size_t);
+static void cleanup(int, FILE *);
 
 int
 main(void)
 {
 	int fd = 0;
+	struct sockaddr_in6 sa6;
 
-	if ((fd = socket(AF_INET6, SOCK_STREAM, 0)) == -1) {
-		perror("Error creating the socket(): ");
-		return EXIT_FAILURE;
+	if (prepare_server(&sa6, sizeof(sa6), &fd) == -1) {
+		perror("Error preparing the server to listen for connections: ");
+		exit(EXIT_FAILURE);
 	}
 
-	struct sockaddr_in6 sa6; /* Server address IPv6. */
-	memset(&sa6, 0, sizeof(sa6));
-	sa6.sin6_family = AF_INET6;
-	sa6.sin6_port = htons(PORTNO);
-	sa6.sin6_addr = in6addr_any;
-
-	if ((bind(fd, (struct sockaddr*) &sa6, sizeof(sa6))) == -1) {
-		perror("Error binding: ");
-		return EXIT_FAILURE;
-	}
-
-	if ((listen(fd, MAX_CLIENTS)) == -1) {
-		perror("Error listening: ");
-		return EXIT_FAILURE;
-	}
-
-	/* Handle SIGINT. */
-	struct sigaction sact;
-	sact.sa_handler = sig_quit_program;
-	sigemptyset(&sact.sa_mask);
-	sact.sa_flags = 0;
-
-	if (sigaction(SIGINT, &sact, NULL) == -1) {
-		perror("Error creating signal handler: ");
-		return EXIT_FAILURE;
+	if (setup_signals() == -1) {
+		perror("Error setting up signals: ");
+		exit(EXIT_FAILURE);
 	}
 
 	/* Open the file to save a log of public messages. */
 	g_log_file = fopen(LOG_FILE_NAME, "a");
 
-	/* Server ready and running. */
 	puts("Server started.");
 
 	while (!g_quit) {
 		pthread_t tid;
-		struct sockaddr_in6 ca6; /* Client address. */
+		struct sockaddr_in6 ca6; /* Client address IPv6. */
 		socklen_t ca6_len = sizeof(ca6);
+
 		int cfd = accept(fd, (struct sockaddr*) &ca6, (socklen_t*) &ca6_len);
+		New_connection_status_codes_wrapper ncscw = process_new_connection(cfd);
 
-		char buff[BUFF_SIZE];
-
-		/* Check if server is full. */
-		if ((g_clients_connected + 1) > MAX_CLIENTS) {
-			strcpy(buff, ERR_STATUS);
-
-			if ((send(cfd, buff, strlen(buff), 0)) == -1)
-				perror("Error sending msg server full: ");
-
+		switch (ncscw.nconn_err) {
+		case NEW_CONN_SYSTEM_ERR:
+			perror("Error processing new connection: ");
 			close(cfd);
 			continue;
+		case NEW_CONN_SV_FULL_ERR:
+			close(cfd);
+			continue;
+		case NEW_CONN_OK:
+			break;
 		}
-
-		/* Send OK status to client. */
-		strcpy(buff, OK_STATUS);
-
-		if ((send(cfd, buff, strlen(buff), 0)) == -1)
-			perror("Error sending ok msg: ");
 
 		char name[NAME_SIZE];
-		memset(name, '\0', sizeof(name));
+		Client_name_status_codes_wrapper cnscw = process_client_name(cfd, name, sizeof(name));
 
-		/* Get client's name and check if it exists. */
-		if (recv(cfd, &name, sizeof(name), 0) == -1) {
-			perror("Error recv'ing client name: ");
+		switch (cnscw.cname_err) {
+		case CL_NAME_SYSTEM_ERR:
+			perror("Error processing client's name: ");
 			close(cfd);
 			continue;
-		}
-
-		if (client_exists(name)) {
-			strcpy(buff, ERR_STATUS);
-
-			if ((send(cfd, buff, strlen(buff), 0)) == -1)
-				perror("Error sending msg client exists: ");
-
+		case CL_NAME_EXISTS_ERR:
 			close(cfd);
 			continue;
+		case CL_NAME_OK:
+			break;
 		}
 
-		/* Send OK status to client. */
-		strcpy(buff, OK_STATUS);
-
-		if ((send(cfd, buff, strlen(buff), 0)) == -1)
-			perror("Error sending ok msg: ");
-
-		client_t *c = create_client(name, g_client_id, cfd);
+		Client_t *c = create_client(name, g_client_id, cfd);
 		add_client(c);
 
 		++g_clients_connected;
 		++g_client_id;
 
 		/* Notify everyone that someone has connected. */
+		char buff[BUFF_SIZE];
 		snprintf(buff, sizeof(buff), "%s has connected.", c->name);
 		printf("%s\n", buff);
 		broadcast_message(buff, c, SRC_SERVER);
@@ -185,9 +172,7 @@ main(void)
 		pthread_create(&tid, NULL, manage_client, (void *) c);
 	}
 
-	/* Cleanup. */
-	close(fd);
-	fclose(g_log_file);
+	cleanup(fd, g_log_file);
 
 	return EXIT_SUCCESS;
 }
@@ -199,7 +184,7 @@ main(void)
  * @param[in] c New client connected.
  */
 static void
-add_client(client_t *c)
+add_client(Client_t *c)
 {
 	pthread_mutex_lock(&client_mutex);
 
@@ -249,10 +234,10 @@ remove_client(const unsigned int id)
  *
  * @return New allocated client.
  */
-static client_t *
+static Client_t *
 create_client(char *name, unsigned int id, int fd)
 {
-	client_t *c = (client_t *) malloc(sizeof(client_t));
+	Client_t *c = (Client_t *) malloc(sizeof(Client_t));
 	strcpy(c->name, name);
 	c->id = id;
 	c->fd = fd;
@@ -278,7 +263,7 @@ create_client(char *name, unsigned int id, int fd)
 static void *
 manage_client(void *c)
 {
-	client_t *client = (client_t *) c;
+	Client_t *client = (Client_t *) c;
 
 	char msg[BUFF_SIZE];
 	int response = 0;
@@ -346,7 +331,7 @@ client_exists(const char *name)
  * @param[in] cmsg Client message: 1 or 0.
  */
 static void
-broadcast_message(const char *msg, client_t *sender, const msg_src ms)
+broadcast_message(const char *msg, Client_t *sender, const Message_source ms)
 {
 	pthread_mutex_lock(&client_mutex);
 
@@ -380,7 +365,7 @@ broadcast_message(const char *msg, client_t *sender, const msg_src ms)
  *
  */
 static void
-send_whisper(char *msg, client_t *sender)
+send_whisper(char *msg, Client_t *sender)
 {
 	/* Copy MSG To TMP because strtok modifies it. */
 	char tmp[MSG_SIZE] = "";
@@ -441,7 +426,7 @@ send_whisper(char *msg, client_t *sender)
  * @param[in] client Message receiver.
  */
 static void
-send_list_clients(client_t *client)
+send_list_clients(Client_t *client)
 {
 	char msg[BUFF_SIZE] = "\n";
 
@@ -465,7 +450,7 @@ send_list_clients(client_t *client)
  * @note The file has to be opened already.
  */
 static void
-log_message(const char *msg, client_t *sender, const msg_src ms)
+log_message(const char *msg, Client_t *sender, const Message_source ms)
 {
 	time_t t;
 	time(&t);
@@ -498,4 +483,154 @@ sig_quit_program(int signo)
 {
 	g_quit = 1;
 	printf("Catched signal %d\n.", signo);
+}
+
+/*
+ * @brief We're only handling the SIGINT signal at the moment.
+ *
+ * @return 0 ok; -1 error.
+ */
+static int
+setup_signals(void)
+{
+	struct sigaction sact;
+	sact.sa_handler = sig_quit_program;
+	sigemptyset(&sact.sa_mask);
+	sact.sa_flags = 0;
+
+	return sigaction(SIGINT, &sact, NULL);
+}
+
+/*
+ * @brief Prepares the server to listen for client connections by
+ * creating the socket, binding, etc.
+ *
+ * @param[in out] sa6 Server address IPv6.
+ * @param[in] sa6_size sizeof(sa6)
+ * @param[in out] fd Server's file descriptor.
+ *
+ * @return 0 ok; -1 otherwise.
+ */
+static int
+prepare_server(struct sockaddr_in6 *sa6, size_t sa6_size, int *fd)
+{
+	if ((*fd = socket(AF_INET6, SOCK_STREAM, 0)) == -1)
+		return -1;
+
+	memset(sa6, 0, sa6_size);
+	sa6->sin6_family = AF_INET6;
+	sa6->sin6_port = htons(PORTNO);
+	sa6->sin6_addr = in6addr_any;
+
+	if ((bind(*fd, (struct sockaddr*) sa6, sa6_size)) == -1)
+		return -1;
+
+	if ((listen(*fd, MAX_CLIENTS)) == -1)
+		return -1;
+
+	return 0;
+}
+
+/*
+ * @brief Check if the server is full. If it is, send an ERR_STATUS to the
+ * client and close its fd.
+ *
+ * If it's not, send OK_STATUS to the client.
+ *
+ * @param[in] fd Client's file descriptor.
+ *
+ * @return The corresponding enumerator indicating OK or the specific error.
+ */
+static New_connection_status_codes_wrapper
+process_new_connection(const int cfd)
+{
+	char buff[BUFF_SIZE];
+	New_connection_status_codes_wrapper ncscw;
+
+	if ((g_clients_connected + 1) > MAX_CLIENTS) {
+		strcpy(buff, ERR_STATUS);
+
+		if ((send(cfd, buff, strlen(buff), 0)) == -1) {
+			ncscw.nconn_err = NEW_CONN_SYSTEM_ERR;
+			ncscw.system_err = errno;
+			return ncscw;
+		} else {
+			ncscw.nconn_err = NEW_CONN_SV_FULL_ERR;
+			ncscw.system_err = 0;
+			return ncscw;
+		}
+	}
+
+	strcpy(buff, OK_STATUS);
+
+	if ((send(cfd, buff, strlen(buff), 0)) == -1) {
+		ncscw.nconn_err = NEW_CONN_SYSTEM_ERR;
+		ncscw.system_err = errno;
+		return ncscw;
+	}
+
+	ncscw.nconn_err = NEW_CONN_OK;
+	ncscw.system_err = 0;
+
+	return ncscw;
+}
+
+/*
+ * @brief Get client's name. If it exists already in the server, then send a
+ * message to the client saying that the server is full.
+ * If it doesn't exist, send an OK status to the client.
+ *
+ * @param[in] cfd Client's file descriptor.
+ * @param[in out] name Name of the client to be fetched.
+ * @param[in] size sizeof(name).
+ */
+static Client_name_status_codes_wrapper
+process_client_name(const int cfd, char *name, const size_t size)
+{
+	Client_name_status_codes_wrapper cnscw;
+
+	memset(name, '\0', size);
+
+	if (recv(cfd, name, size, 0) == -1) {
+		cnscw.cname_err = CL_NAME_SYSTEM_ERR;
+		cnscw.system_err = errno;
+		return cnscw;
+	}
+
+	/* If the client name exists, send an ERR_STATUS message to the client. */
+	char buff[BUFF_SIZE];
+	if (client_exists(name)) {
+		strcpy(buff, ERR_STATUS);
+
+		if ((send(cfd, buff, strlen(buff), 0)) == -1) {
+			cnscw.cname_err = CL_NAME_SYSTEM_ERR;
+			cnscw.system_err = errno;
+			return cnscw;
+		}
+
+		cnscw.cname_err = CL_NAME_EXISTS_ERR;
+		cnscw.system_err = 0;
+		return cnscw;
+	}
+
+	/* Send OK status to client. */
+	strcpy(buff, OK_STATUS);
+
+	if ((send(cfd, buff, strlen(buff), 0)) == -1) {
+		cnscw.cname_err = CL_NAME_SYSTEM_ERR;
+		cnscw.system_err = errno;
+		return cnscw;
+	}
+
+	cnscw.cname_err = CL_NAME_OK;
+	cnscw.system_err = 0;
+
+	return cnscw;
+}
+
+static void
+cleanup(int fd, FILE *file)
+{
+	close(fd);
+	fclose(file);
 }

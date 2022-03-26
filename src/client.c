@@ -59,7 +59,6 @@ static void print_welcome(void);
 static int setup_signals(void);
 static void cleanup(int *);
 
-/* Globals. */
 volatile sig_atomic_t g_quit = 0;
 
 int
@@ -228,6 +227,34 @@ listen_from_server(void *arg)
 }
 
 /*
+ * @brief Gets the user message, checks for overflow and trims it.
+ *
+ * @param[in out] msg Sanitized message.
+ * @param[in] size Size of the message.
+ *
+ * @return 0 ok; -1 error.
+ */
+int
+get_message(char *msg, size_t size)
+{
+	memset(msg, 0, size);
+
+	printf("> ");
+	fflush(stdout);
+
+	if (fgets(msg, MSG_SIZE - 1, stdin) == NULL)
+		return -1;
+
+	if (msg[strlen(msg) - 1] != '\n') /* Message too long; avoid overflow. */
+		flush_endl();
+
+	trim(msg);
+	msg[strcspn(msg, "\n")] = '\0';
+
+	return 0;
+}
+
+/*
  * @brief Prompt the user to write a message.
  * The message will get formatted to something like this: "username: message"
  *
@@ -241,22 +268,10 @@ prompt_user(void *arg)
 	char msg[MSG_SIZE];
 
 	while (1) {
-		memset(msg, 0, sizeof(msg));
-
-		printf("> ");
-		fflush(stdout);
-
-		if (fgets(msg, MSG_SIZE - 1, stdin) == NULL) {
-			perror("Error getting user input: ");
+		if (get_message(msg, sizeof(msg)) == -1) {
+			perror("Error getting user message: ");
 			continue;
 		}
-
-		if (msg[strlen(msg) - 1] != '\n') { /* Message too long; avoid overflow. */
-			flush_endl();
-		}
-
-		trim(msg);
-		msg[strcspn(msg, "\n")] = '\0';
 
 		if (strcmp(msg, QUIT_CMD) == 0) {
 			g_quit = 1;
