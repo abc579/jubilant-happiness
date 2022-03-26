@@ -61,3 +61,4 @@ Run N clients and chat.
 
 - Don't close the program when the username already exists. (misleading msg)
 - Rename example to screenshots.
+- Creating a new file to store technical errors.
