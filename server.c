@@ -7,6 +7,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <signal.h>
+#include <time.h>
 #include "common.h"
 
 /* Constants. */
@@ -72,7 +73,7 @@ static int client_exists(const char *);
 static void broadcast_message(const char*, client_t *, const msg_src);
 static void send_whisper(char *, client_t *);
 static void send_list_clients(client_t *);
-static void log_message(const char *);
+static void log_message(const char *, client_t *, const msg_src);
 static void sig_quit_program(int);
 
 int
@@ -179,7 +180,7 @@ main(void)
 		snprintf(buff, sizeof(buff), "%s has connected.", c->name);
 		printf("%s\n", buff);
 		broadcast_message(buff, c, SRC_SERVER);
-		log_message(buff);
+		log_message(buff, c, SRC_SERVER);
 
 		pthread_create(&tid, NULL, manage_client, (void *) c);
 	}
@@ -292,12 +293,12 @@ manage_client(void *c)
 				send_whisper(msg, client);
 			} else {
 				broadcast_message(msg, client, SRC_CLIENT);
-				log_message(msg);
+				log_message(msg, client, SRC_CLIENT);
 			}
 		} else if (response == 0) {
 			snprintf(msg, sizeof(msg), "%s has quit.", client->name);
 			broadcast_message(msg, client, SRC_SERVER);
-			log_message(msg);
+			log_message(msg, client, SRC_SERVER);
 			printf("%s\n", msg);
 			break;
 		} else {
@@ -458,13 +459,31 @@ send_list_clients(client_t *client)
  * @brief Append MSG to the log file.
  *
  * @param[in] MSG to be appended.
+ * @param[in] SENDER of the message.
+ * @param[in] MS source of the message (server/client).
  *
  * @note The file has to be opened already.
  */
 static void
-log_message(const char *msg)
+log_message(const char *msg, client_t *sender, const msg_src ms)
 {
-	(void)fprintf(g_log_file, "%s\n", msg);
+	time_t t;
+	time(&t);
+	struct tm *date = gmtime(&t);
+	char datestr[50];
+	snprintf(datestr, sizeof(datestr), "[%d-%d-%d %d:%d:%d]",
+		 date->tm_year + 1900,
+		 date->tm_mon + 1,
+		 date->tm_mday,
+		 date->tm_hour,
+		 date->tm_min,
+		 date->tm_sec);
+
+	if (ms == SRC_SERVER)
+		(void)fprintf(g_log_file, "%s %s\n", datestr, msg);
+	else
+		(void)fprintf(g_log_file, "%s %s: %s\n", datestr, sender->name, msg);
+
 	fflush(g_log_file);
 }
 
