@@ -50,7 +50,7 @@ typedef struct {
 } Client_data_t;
 
 static Connection_status_codes_wrapper connect_to_server(struct sockaddr_in6 *,
-                                                     size_t, int *);
+							 size_t, int *);
 static Register_user_status_codes_wrapper register_user(User_t *, const int);
 static void *listen_from_server(void *);
 static void *prompt_user(void *);
