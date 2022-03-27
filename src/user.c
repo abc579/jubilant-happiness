@@ -22,6 +22,11 @@ validate_name(const char *name)
 	return NAME_OK;
 }
 
+/*
+ * @brief Waits for user input and validates it.
+ *
+ * @param[in out] name Name typed by the user.
+ */
 Name_status_codes_wrapper
 get_name(char *name)
 {
@@ -37,6 +42,7 @@ get_name(char *name)
 		flush_endl();
 	}
 
+	trim(name);
 	name[strcspn(name, "\n")] = '\0'; /* Get rid of the newline. */
 
 	Name_status_codes ne = validate_name(name);
