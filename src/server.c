@@ -539,7 +539,7 @@ prepare_server(struct sockaddr_in6 *sa6, size_t sa6_size, int *fd)
  *
  * @param[in] fd Client's file descriptor.
  *
- * @return The corresponding enumerator indicating OK or the specific error.
+ * @return A struct containing the corresponding status.
  */
 static New_connection_status_codes_wrapper
 process_new_connection(const int cfd)
@@ -583,6 +583,8 @@ process_new_connection(const int cfd)
  * @param[in] cfd Client's file descriptor.
  * @param[in out] name Name of the client to be fetched.
  * @param[in] size sizeof(name).
+ *
+ * @return A struct containing the corresponding status.
  */
 static Client_name_status_codes_wrapper
 process_client_name(const int cfd, char *name, const size_t size)

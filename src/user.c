@@ -5,6 +5,8 @@
  * Otherwise, the corresponding enumerator indicating which error NAME has.
  *
  * @param[in] name
+ *
+ * @return The corresponding enumerator indicating error or successful validation.
  */
 Name_status_codes
 validate_name(const char *name)
@@ -26,6 +28,8 @@ validate_name(const char *name)
  * @brief Waits for user input and validates it.
  *
  * @param[in out] name Name typed by the user.
+ *
+ * @return A struct containing the status of the validation.
  */
 Name_status_codes_wrapper
 get_name(char *name)
