@@ -82,19 +82,15 @@ main(void)
 		case NAME_ERR_MIN_LEN:
 			fprintf(stderr, "Your name has to be at least %d characters long.\n", MIN_NAME_LEN);
 			continue;
-			break;
 		case NAME_ERR_MAX_LEN:
 			fprintf(stderr, "Your name can't exceed %d characters long.\n", NAME_SIZE);
 			continue;
-			break;
 		case NAME_ERR_WSPACE:
 			fprintf(stderr, "Your name can't contain a whitespace in between.\n");
 			continue;
-			break;
 		case NAME_SYSTEM_ERR:
 			fprintf(stderr, "Error reading user name%s\n.", strerror(necw.system_errno));
 			continue;
-			break;
 		case NAME_OK:
 			break;
 		}
@@ -105,23 +101,18 @@ main(void)
 		case CONN_SOCKET_ERR:
 			fprintf(stderr, "Error creating socket%s\n", strerror(cecw.system_errno));
 			continue;
-			break;
 		case CONN_PTON_ERR:
 			fprintf(stderr, "Error calling inet_pton()%s\n", strerror(cecw.system_errno));
 			continue;
-			break;
 		case CONN_CONNECT_ERR:
 			fprintf(stderr, "Error connecting to server%s\n", strerror(cecw.system_errno));
 			continue;
-			break;
 		case CONN_RECV_ERR:
 			fprintf(stderr, "Error receiving data from server%s\n", strerror(cecw.system_errno));
 			continue;
-			break;
 		case CONN_SV_FULL_ERR:
 			fprintf(stderr, "The server is full. Please try again.\n");
 			continue;
-			break;
 		case CONN_OK:
 			break;
 		}
@@ -133,15 +124,12 @@ main(void)
 		case REGUSR_SEND_ERR:
 			fprintf(stderr, "Error sending name to server%s\n", strerror(ruscw.system_errno));
 			continue;
-			break;
 		case REGUSR_RECV_ERR:
 			fprintf(stderr, "Error receiving data to server%s\n", strerror(ruscw.system_errno));
 			continue;
-			break;
 		case REGUSR_NAME_EXISTS_ERR:
 			fprintf(stderr, "Your name already exists in the server. Please, try again.\n");
 			continue;
-			break;
 		case REGUSR_OK:
 			username_ok = 1;
 			break;
