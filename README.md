@@ -1,4 +1,4 @@
-# jubilant-happiness
+# newbie-c-chat
 
 Small C chat application using sockets.
 
