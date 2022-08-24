@@ -34,11 +34,11 @@ a grain of salt.
 
 Clone the repository.
 
-	git clone https://github.com/abc579/jubilant-happiness.git
+	git clone https://github.com/abc579/newbie-c-chat.git
 
 Compile.
 
-    cd jubilant-happiness
+    cd newbie-c-chat
     make
 
 Run the server.
